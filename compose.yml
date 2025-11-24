@@ -13,11 +13,21 @@ services:
     environment:
       - RACK_ENV=development
       - LLM_ENDPOINT=http://host.docker.internal:1234
-      - TZ=Asia/Tokyo
+      - TZ=Asia/Tokyo # Set your timezone
+      # Uncomment to disable saving translations
+      # 翻訳の保存を無効にする場合はコメントアウトを外してください
+      # - SAVE_TRANSLATIONS=false
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4567/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
+  # Remove this service if you do not want to expose it externally
+  # 外部公開しない場合はこのサービスを削除してください
   tunnel:
     image: cloudflare/cloudflared
     command: tunnel run
