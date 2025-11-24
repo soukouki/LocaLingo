@@ -9,17 +9,23 @@ require 'fileutils'
 set :port, 4567
 set :bind, '0.0.0.0'
 
+# ロガーの設定
 logger = Logger.new(STDOUT)
 logger.level = Logger::INFO
-STDOUT.sync = true
+STDOUT.sync = true  # 即座にログを出力
 
 set :public_folder, 'public'
 
-LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://lmstudio:1234'
+# 環境変数から設定を読み込む
+LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
 TRANSLATIONS_FILE = 'data/translations.json'
+SAVE_TRANSLATIONS = ENV['SAVE_TRANSLATIONS'] != 'false' # デフォルトはtrue
 
+# 絵文字をエイリアス記法（:smile: など）に変換する
+# LLMが絵文字を正しく処理できるようにするための前処理
 def replace_emoji(text)
-  regexp = Regexp.new((Emoji.all.map(&:raw)-["*️⃣"]+["\\*️⃣"]).join('|'))
+  # *️⃣は*とみなされてうまく動かないので除外してから、エスケープ済みの\*️⃣として追加
+  regexp = Regexp.new((Emoji.all.map(&:raw) - ["*️⃣"] + ["\\*️⃣"]).join('|'))
   text.gsub(regexp) do |emoji|
     e = Emoji.find_by_unicode(emoji)
     logger.debug "Found emoji: #{emoji} -> #{e.aliases.first if e}"
@@ -27,6 +33,7 @@ def replace_emoji(text)
   end
 end
 
+# 翻訳結果をJSONファイルに保存する
 def save_translation(input_text, output_text, direction, metrics)
   translations = []
   if File.exist?(TRANSLATIONS_FILE)
@@ -49,15 +56,18 @@ rescue => e
   logger.error "Failed to save translation: #{e.message}"
 end
 
+# トップページの表示
 get '/' do
   send_file File.join(settings.public_folder, 'index.html')
 end
 
+# 翻訳APIエンドポイント（Server-Sent Events形式でストリーミング）
 post '/api/translate' do
   content_type 'text/event-stream'
   
   stream :keep_open do |out|
     begin
+      # リクエストボディをパース
       request_body = JSON.parse(request.body.read)
       text = request_body['text']
       direction = request_body['direction']
@@ -67,17 +77,21 @@ post '/api/translate' do
       logger.info "Text length: #{text&.length || 0}"
       logger.info "LLM Endpoint: #{LLM_ENDPOINT}"
 
+      # 翻訳方向に応じて言語ペアを設定
       input_lang, output_lang = case direction
       when 'en-ja'
         ['English', 'Japanese']
       when 'ja-en'
         ['Japanese', 'English']
       else
-        ['English', 'Japanese']
+        ['English', 'Japanese']  # デフォルト
       end
 
+      # 絵文字をエイリアス記法に変換してからプロンプトを構築
       replaced_text = replace_emoji(text)
       print(replaced_text)
+      
+      # plamo-2-translate用のプロンプトフォーマット
       prompt = "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=#{input_lang}\n#{replaced_text}\n<|plamo:op|>output lang=#{output_lang}"
       
       logger.info "Generated prompt (first 100 chars): #{prompt[0..100]}..."
@@ -85,10 +99,12 @@ post '/api/translate' do
       uri = URI.parse("#{LLM_ENDPOINT}/v1/chat/completions")
       logger.info "Connecting to: #{uri}"
 
+      # メトリクス計測用の変数
       token_count = 0
-      accumulated_output = ""
+      accumulated_output = ""  # ストリーミングで受信した全テキスト
       start_time = Time.now
       first_token_time = nil
+      translation_saved = false  # 翻訳結果の重複保存を防ぐフラグ
       
       Net::HTTP.start(uri.host, uri.port, read_timeout: 300) do |http|
         request = Net::HTTP::Post.new(uri.path)
@@ -98,7 +114,7 @@ post '/api/translate' do
           messages: [
             { role: 'user', content: prompt }
           ],
-          stream: true
+          stream: true  # ストリーミングモードを有効化
         }.to_json
 
         logger.info "Sending request to LLM..."
@@ -107,22 +123,28 @@ post '/api/translate' do
           logger.info "Response status: #{response.code}"
           logger.info "Response headers: #{response.to_hash.inspect}"
           
+          # HTTPエラーチェック
           unless response.code == '200'
             logger.error "HTTP Error: #{response.code} #{response.message}"
             out << "data: #{JSON.generate({ error: "HTTP #{response.code}: #{response.message}" })}\n\n"
             next
           end
 
-          buffer = ''
+          buffer = ''  # 不完全な行を一時的に保存するバッファ
+          
           response.read_body do |chunk|
             logger.debug "Received chunk: #{chunk.bytesize} bytes"
             
             buffer += chunk
             
+            # -1を指定すると、末尾が\nで終わる場合も空文字列を保持する
+            # これにより、不完全な行をバッファに残すことができる
             lines = buffer.split("\n", -1)
             
+            # 最後の要素（不完全な可能性がある行）を次回に持ち越す
             buffer = lines.pop || ''
             
+            # 完全な行のみを処理
             lines.each do |line|
               line = line.strip
               next if line.empty?
@@ -130,6 +152,7 @@ post '/api/translate' do
 
               data = line.sub('data: ', '').strip
               
+              # ストリーム終了シグナル
               if data == '[DONE]'
                 end_time = Time.now
                 total_time = end_time - start_time
@@ -141,14 +164,18 @@ post '/api/translate' do
                 logger.info "Total time: #{total_time.round(3)}s"
                 logger.info "Tokens/sec: #{tokens_per_sec.round(2)}"
                 
-                metrics = {
-                  token_count: token_count,
-                  time_to_first_token: time_to_first_token.round(3),
-                  total_time: total_time.round(3),
-                  tokens_per_sec: tokens_per_sec.round(2)
-                }
+                # 未保存の場合のみ翻訳結果を保存
+                if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+                  metrics = {
+                    token_count: token_count,
+                    time_to_first_token: time_to_first_token.round(3),
+                    total_time: total_time.round(3),
+                    tokens_per_sec: tokens_per_sec.round(2)
+                  }
+                  save_translation(text, accumulated_output, direction, metrics)
+                  translation_saved = true
+                end
                 
-                save_translation(text, accumulated_output, direction, metrics)
                 out << "data: #{JSON.generate({ done: true })}\n\n"
                 next
               end
@@ -158,14 +185,24 @@ post '/api/translate' do
                 content = json.dig('choices', 0, 'delta', 'content')
                 
                 if content
+                  # plamo-2-translateにおいて、このトークンが出てきたら翻訳失敗を意味する
+                  if content.include?("<|plamo:reserved:0x1E|>")
+                    logger.error "Translation failed token detected."
+                    out << "data: #{JSON.generate({ error: "翻訳に失敗しました。" })}\n\n"
+                    # これ以上の処理を中断
+                    break
+                  end
+                  
                   token_count += 1
-                  first_token_time ||= Time.now
+                  first_token_time ||= Time.now  # 最初のトークン受信時刻を記録
                   accumulated_output += content
                   logger.debug "Token ##{token_count}: #{content.inspect}"
                   
+                  # クライアントにトークンを送信
                   out << "data: #{JSON.generate({ token: content })}\n\n"
                 end
 
+                # 生成完了シグナル
                 finish_reason = json.dig('choices', 0, 'finish_reason')
                 if finish_reason == 'stop'
                   end_time = Time.now
@@ -178,15 +215,20 @@ post '/api/translate' do
                   logger.info "Total time: #{total_time.round(3)}s"
                   logger.info "Tokens/sec: #{tokens_per_sec.round(2)}"
                   
-                  metrics = {
-                    token_count: token_count,
-                    time_to_first_token: time_to_first_token.round(3),
-                    total_time: total_time.round(3),
-                    tokens_per_sec: tokens_per_sec.round(2)
-                  }
+                  # 未保存の場合のみ翻訳結果を保存
+                  if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+                    metrics = {
+                      token_count: token_count,
+                      time_to_first_token: time_to_first_token.round(3),
+                      total_time: total_time.round(3),
+                      tokens_per_sec: tokens_per_sec.round(2)
+                    }
+                    save_translation(text, accumulated_output, direction, metrics)
+                    translation_saved = true
+                  end
                   
-                  save_translation(text, accumulated_output, direction, metrics)
                   out << "data: #{JSON.generate({ done: true })}\n\n"
+                  next
                 end
               rescue JSON::ParserError => e
                 logger.error "JSON parse error: #{e.message}"
@@ -195,6 +237,7 @@ post '/api/translate' do
             end
           end
           
+          # read_body完了後、バッファに残ったデータを処理
           unless buffer.empty?
             logger.debug "Processing remaining buffer: #{buffer}"
             if buffer.start_with?('data: ')
@@ -210,14 +253,18 @@ post '/api/translate' do
                 logger.info "Total time: #{total_time.round(3)}s"
                 logger.info "Tokens/sec: #{tokens_per_sec.round(2)}"
                 
-                metrics = {
-                  token_count: token_count,
-                  time_to_first_token: time_to_first_token.round(3),
-                  total_time: total_time.round(3),
-                  tokens_per_sec: tokens_per_sec.round(2)
-                }
+                # 未保存の場合のみ翻訳結果を保存
+                if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+                  metrics = {
+                    token_count: token_count,
+                    time_to_first_token: time_to_first_token.round(3),
+                    total_time: total_time.round(3),
+                    tokens_per_sec: tokens_per_sec.round(2)
+                  }
+                  save_translation(text, accumulated_output, direction, metrics)
+                  translation_saved = true
+                end
                 
-                save_translation(text, accumulated_output, direction, metrics)
                 out << "data: #{JSON.generate({ done: true })}\n\n"
               end
             end
@@ -257,6 +304,7 @@ post '/api/translate' do
   end
 end
 
+# ヘルスチェックエンドポイント
 get '/health' do
   content_type :json
   { status: 'ok', llm_endpoint: LLM_ENDPOINT }.to_json
