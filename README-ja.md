@@ -3,6 +3,8 @@
 
 LocaLingoは、Preferred Networksによって開発された翻訳向け特化型大規模言語モデルであるPLaMo翻訳モデルを利用した、翻訳WebUIです。LM StudioやOllamaなどのOpenAI互換APIを持ったローカルLLMサーバーと連携して動作します。
 
+![LocaLingo Screenshot](docs/screenshot.png)
+
 ## 特徴
 
 - **文字長制限なし**: 一般の翻訳ツールでは2000文字程度の制限がありますが、LocaLingoではそのような制限はありません。使用するLLMサーバーの制限に依存しますが、数万、数十万文字の翻訳も可能です。

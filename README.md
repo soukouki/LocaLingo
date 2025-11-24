@@ -4,6 +4,8 @@
 
 LocaLingo is a translation web UI that utilizes PLaMo's specialized large language model for machine translation, developed by Preferred Networks. It operates in tandem with local LLM servers supporting OpenAI-compatible APIs, including LM Studio and Ollama.
 
+![LocaLingo Screenshot](docs/screenshot.png)
+
 ## Features
 
 - **Unrestricted character limit**: While conventional translation tools typically impose 2,000-character limits, LocaLingo has no such restrictions. The maximum length depends on the capabilities of the connected LLM server, but translations can span tens of thousands or even hundreds of thousands of characters.
