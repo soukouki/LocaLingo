@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocaLingo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="app" class="min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+      <header class="mb-8 text-center">
+        <h1 class="text-4xl font-bold text-blue-600 mb-2">LocaLingo</h1>
+        <p class="text-gray-600">ローカルLLMによる翻訳サービス</p>
+      </header>
+
+      <div class="flex justify-center mb-6">
+        <div class="inline-flex rounded-lg border border-gray-300 bg-white p-1">
+          <button
+            @click="direction = 'en-ja'"
+            :class="direction === 'en-ja' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'"
+            class="px-6 py-2 rounded-md font-medium transition-colors"
+          >
+            英語 → 日本語
+          </button>
+          <button
+            @click="direction = 'ja-en'"
+            :class="direction === 'ja-en' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'"
+            class="px-6 py-2 rounded-md font-medium transition-colors"
+          >
+            日本語 → 英語
+          </button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold text-gray-800">
+              {{ direction === 'en-ja' ? '英語' : '日本語' }}
+            </h2>
+            <button
+              v-if="inputText"
+              @click="clearInput"
+              class="text-gray-400 hover:text-gray-600 transition-colors"
+              title="クリア"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <textarea
+            v-model="inputText"
+            :placeholder="direction === 'en-ja' ? 'Enter English text...' : '日本語を入力してください...'"
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            :style="{ minHeight: '16rem', height: textareaHeight }"
+            @input="adjustHeight"
+            :disabled="isTranslating"
+          ></textarea>
+          <div class="mt-4">
+            <button
+              @click="translate"
+              :disabled="isTranslating || !inputText.trim()"
+              :class="isTranslating || !inputText.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'"
+              class="w-full py-3 px-4 text-white font-medium rounded-md transition-colors"
+            >
+              {{ isTranslating ? '翻訳中...' : '翻訳する' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold text-gray-800">
+              {{ direction === 'en-ja' ? '日本語' : '英語' }}
+            </h2>
+            <button
+              v-if="outputText"
+              @click="copyToClipboard"
+              class="text-gray-400 hover:text-gray-600 transition-colors"
+              :title="copied ? 'コピーしました！' : 'コピー'"
+            >
+              <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </div>
+          <div 
+            class="w-full p-3 border border-gray-300 rounded-md bg-gray-50 overflow-y-auto"
+            :style="{ minHeight: '16rem', maxHeight: outputHeight }"
+          >
+            <p v-if="outputText" class="whitespace-pre-wrap">{{ outputText }}</p>
+            <p v-else class="text-gray-400">翻訳結果がここに表示されます</p>
+          </div>
+          <div class="mt-4" v-if="isTranslating">
+            <button
+              @click="stop"
+              class="w-full py-3 px-4 bg-red-500 hover:bg-red-600 text-white font-medium rounded-md transition-colors"
+            >
+              停止する
+            </button>
+          </div>
+          <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p class="text-red-600 text-sm">{{ error }}</p>
+          </div>
+        </div>
+      </div>
+
+      <footer class="mt-12 pt-6 border-t border-gray-200">
+        <div class="flex items-center justify-center gap-2 text-xs text-gray-400">
+          <button
+            @click="showNotice = !showNotice"
+            class="hover:text-gray-600 transition-colors flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>ご利用にあたって</span>
+          </button>
+        </div>
+        <div v-if="showNotice" class="mt-4 max-w-2xl mx-auto">
+          <div class="bg-gray-50 border border-gray-200 rounded-md p-4 text-xs text-gray-600 space-y-2">
+            <ul class="list-disc">
+              <li>翻訳の入力・出力内容は記録され、サービス改善のために使用されます。</li>
+              <li>本サービスはsou7の個人GPUで稼働しているため、アクセス集中時やメンテナンス時などには利用できない場合があります。</li>
+              <li>本サービスは株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015">plamo-2-translate</a>を利用しています。</li>
+              <li>本サービスの利用により生じた損害について、運営者は一切の責任を負いかねます。自己責任でご利用ください。</li>
+            </ul>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          direction: 'en-ja',
+          inputText: '',
+          outputText: '',
+          isTranslating: false,
+          controller: null,
+          error: '',
+          textareaHeight: '16rem',
+          outputHeight: '32rem',
+          showNotice: false,
+          copied: false
+        }
+      },
+      methods: {
+        adjustHeight(event) {
+          const textarea = event.target;
+          textarea.style.height = 'auto';
+          const newHeight = Math.max(256, textarea.scrollHeight);
+          this.textareaHeight = `${newHeight}px`;
+          this.outputHeight = `${Math.max(512, newHeight * 2)}px`;
+        },
+        async translate() {
+          if (!this.inputText.trim()) return;
+
+          this.isTranslating = true;
+          this.outputText = '';
+          this.error = '';
+          this.copied = false;
+
+          console.log('Starting translation...');
+          console.log('Direction:', this.direction);
+          console.log('Input text:', this.inputText);
+
+          try {
+            this.controller = new AbortController();
+
+            const response = await fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: this.inputText,
+                direction: this.direction
+              }),
+              signal: this.controller.signal
+            });
+
+            console.log('Response status:', response.status);
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let tokenCount = 0;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                console.log('Stream ended');
+                break;
+              }
+
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6).trim();
+                  
+                  console.log('Received data:', data);
+
+                  try {
+                    const json = JSON.parse(data);
+                    
+                    if (json.token) {
+                      tokenCount++;
+                      console.log(`Token #${tokenCount}:`, json.token);
+                      this.outputText += json.token;
+                    }
+                    
+                    if (json.done) {
+                      console.log('Translation completed');
+                      this.isTranslating = false;
+                      return;
+                    }
+                    
+                    if (json.error) {
+                      this.error = json.error;
+                      console.error('Server error:', json.error);
+                      this.isTranslating = false;
+                      return;
+                    }
+                  } catch (e) {
+                    console.error('JSON parse error:', e, 'Data:', data);
+                  }
+                }
+              }
+            }
+
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              console.log('Translation aborted');
+            } else {
+              this.error = `エラーが発生しました: ${err.message}`;
+              console.error('Translation error:', err);
+            }
+          } finally {
+            this.isTranslating = false;
+          }
+        },
+        async stop() {
+          if (this.controller) {
+            this.controller.abort();
+            this.isTranslating = false;
+          }
+        },
+        clearInput() {
+          this.inputText = '';
+          this.textareaHeight = '16rem';
+          this.outputHeight = '32rem';
+        },
+        async copyToClipboard() {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(this.outputText);
+            } else {
+              const textarea = document.createElement('textarea');
+              textarea.value = this.outputText;
+              textarea.style.position = 'fixed';
+              textarea.style.opacity = '0';
+              document.body.appendChild(textarea);
+              textarea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textarea);
+            }
+            
+            this.copied = true;
+            setTimeout(() => {
+              this.copied = false;
+            }, 2000);
+          } catch (err) {
+            console.error('Failed to copy:', err);
+            this.error = 'コピーに失敗しました';
+            setTimeout(() => {
+              this.error = '';
+            }, 2000);
+          }
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

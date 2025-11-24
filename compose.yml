@@ -1,0 +1,27 @@
+services:
+
+  app:
+    build:
+      context: ./localingo
+      dockerfile: Dockerfile
+    ports:
+      - "4567:4567"
+    volumes:
+      - ./localingo/app.rb:/app/app.rb
+      - ./localingo/public:/app/public
+      - ./localingo/data:/app/data
+    environment:
+      - RACK_ENV=development
+      - LLM_ENDPOINT=http://host.docker.internal:1234
+      - TZ=Asia/Tokyo
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
+      TUNNEL_METRICS: "0.0.0.0:4567"
+    restart: unless-stopped

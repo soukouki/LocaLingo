@@ -1,0 +1,7 @@
+
+source 'https://rubygems.org'
+
+gem 'sinatra', '~> 3.1'
+gem 'falcon', '~> 0.48'
+gem 'json', '~> 2.7'
+gem 'gemoji', '~> 4.1'
