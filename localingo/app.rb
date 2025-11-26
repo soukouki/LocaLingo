@@ -21,18 +21,6 @@ LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
 TRANSLATIONS_FILE = 'data/translations.json'
 SAVE_TRANSLATIONS = ENV['SAVE_TRANSLATIONS'] != 'false' # デフォルトはtrue
 
-# 絵文字をエイリアス記法（:smile: など）に変換する
-# LLMが絵文字を正しく処理できるようにするための前処理
-def replace_emoji(text)
-  # *️⃣は*とみなされてうまく動かないので除外してから、エスケープ済みの\*️⃣として追加
-  regexp = Regexp.new((Emoji.all.map(&:raw) - ["*️⃣"] + ["\\*️⃣"]).join('|'))
-  text.gsub(regexp) do |emoji|
-    e = Emoji.find_by_unicode(emoji)
-    logger.debug "Found emoji: #{emoji} -> #{e.aliases.first if e}"
-    e ? ":#{e.aliases.first}:" : emoji
-  end
-end
-
 # 翻訳結果をJSONファイルに保存する
 def save_translation(input_text, output_text, direction, metrics)
   translations = []
@@ -61,6 +49,8 @@ get '/' do
   send_file File.join(settings.public_folder, 'index.html')
 end
 
+class StopInference < StandardError; end
+
 # 翻訳APIエンドポイント（Server-Sent Events形式でストリーミング）
 post '/api/translate' do
   content_type 'text/event-stream'
@@ -86,13 +76,9 @@ post '/api/translate' do
       else
         ['English', 'Japanese']  # デフォルト
       end
-
-      # 絵文字をエイリアス記法に変換してからプロンプトを構築
-      replaced_text = replace_emoji(text)
-      print(replaced_text)
       
       # plamo-2-translate用のプロンプトフォーマット
-      prompt = "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=#{input_lang}\n#{replaced_text}\n<|plamo:op|>output lang=#{output_lang}"
+      prompt = "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=#{input_lang}\n#{text}<|plamo:op|>output lang=#{output_lang}"
       
       logger.info "Generated prompt (first 100 chars): #{prompt[0..100]}..."
 
@@ -189,8 +175,18 @@ post '/api/translate' do
                   if content.include?("<|plamo:reserved:0x1E|>")
                     logger.error "Translation failed token detected."
                     out << "data: #{JSON.generate({ error: "翻訳に失敗しました。" })}\n\n"
+                    if SAVE_TRANSLATIONS && !translation_saved
+                      metrics = {
+                        token_count: token_count,
+                        time_to_first_token: first_token_time ? (first_token_time - start_time).round(3) : 0,
+                        total_time: (Time.now - start_time).round(3),
+                        tokens_per_sec: token_count > 0 ? (token_count / (Time.now - start_time)).round(2) : 0
+                      }
+                      save_translation(text, accumulated_output, direction, metrics)
+                      translation_saved = true
+                    end
                     # これ以上の処理を中断
-                    break
+                    raise StopInference
                   end
                   
                   token_count += 1
