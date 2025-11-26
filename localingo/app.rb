@@ -21,8 +21,29 @@ LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
 TRANSLATIONS_FILE = 'data/translations.json'
 SAVE_TRANSLATIONS = ENV['SAVE_TRANSLATIONS'] != 'false' # デフォルトはtrue
 
+# 言語マッピング
+LANGUAGE_MAP = {
+  'ja' => 'Japanese',
+  'ja-easy' => 'Japanese(easy)',
+  'en' => 'English',
+  'zh' => 'Chinese',
+  'zh-tw' => 'Taiwanese',
+  'ko' => 'Korean',
+  'ar' => 'Arabic',
+  'it' => 'Italian',
+  'id' => 'Indonesian',
+  'nl' => 'Dutch',
+  'es' => 'Spanish',
+  'th' => 'Thai',
+  'de' => 'German',
+  'fr' => 'French',
+  'vi' => 'Vietnamese',
+  'ru' => 'Russian',
+  'auto' => 'English|Japanese'  # 自動検知
+}
+
 # 翻訳結果をJSONファイルに保存する
-def save_translation(input_text, output_text, direction, metrics)
+def save_translation(input_text, output_text, source_lang, target_lang, metrics)
   translations = []
   if File.exist?(TRANSLATIONS_FILE)
     content = File.read(TRANSLATIONS_FILE)
@@ -31,7 +52,8 @@ def save_translation(input_text, output_text, direction, metrics)
 
   translation_record = {
     timestamp: Time.now.iso8601,
-    direction: direction,
+    source_lang: source_lang,
+    target_lang: target_lang,
     input: input_text,
     output: output_text,
     metrics: metrics
@@ -51,7 +73,7 @@ end
 
 class StopInference < StandardError; end
 
-# 翻訳APIエンドポイント（Server-Sent Events形式でストリーミング）
+# 翻訳APIエンドポイント(Server-Sent Events形式でストリーミング)
 post '/api/translate' do
   content_type 'text/event-stream'
   
@@ -60,22 +82,18 @@ post '/api/translate' do
       # リクエストボディをパース
       request_body = JSON.parse(request.body.read)
       text = request_body['text']
-      direction = request_body['direction']
+      source_lang = request_body['source_lang'] || 'auto'
+      target_lang = request_body['target_lang'] || 'auto'
 
       logger.info "=== Translation Request ==="
-      logger.info "Direction: #{direction}"
+      logger.info "Source: #{source_lang} (#{LANGUAGE_MAP[source_lang]})"
+      logger.info "Target: #{target_lang} (#{LANGUAGE_MAP[target_lang]})"
       logger.info "Text length: #{text&.length || 0}"
       logger.info "LLM Endpoint: #{LLM_ENDPOINT}"
 
-      # 翻訳方向に応じて言語ペアを設定
-      input_lang, output_lang = case direction
-      when 'en-ja'
-        ['English', 'Japanese']
-      when 'ja-en'
-        ['Japanese', 'English']
-      else
-        ['English', 'Japanese']  # デフォルト
-      end
+      # 言語コードを実際の言語名に変換
+      input_lang = LANGUAGE_MAP[source_lang] || LANGUAGE_MAP['auto']
+      output_lang = LANGUAGE_MAP[target_lang] || LANGUAGE_MAP['auto']
       
       # plamo-2-translate用のプロンプトフォーマット
       prompt = "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=#{input_lang}\n#{text}<|plamo:op|>output lang=#{output_lang}"
@@ -127,7 +145,7 @@ post '/api/translate' do
             # これにより、不完全な行をバッファに残すことができる
             lines = buffer.split("\n", -1)
             
-            # 最後の要素（不完全な可能性がある行）を次回に持ち越す
+            # 最後の要素(不完全な可能性がある行)を次回に持ち越す
             buffer = lines.pop || ''
             
             # 完全な行のみを処理
@@ -158,7 +176,7 @@ post '/api/translate' do
                     total_time: total_time.round(3),
                     tokens_per_sec: tokens_per_sec.round(2)
                   }
-                  save_translation(text, accumulated_output, direction, metrics)
+                  save_translation(text, accumulated_output, source_lang, target_lang, metrics)
                   translation_saved = true
                 end
                 
@@ -182,7 +200,7 @@ post '/api/translate' do
                         total_time: (Time.now - start_time).round(3),
                         tokens_per_sec: token_count > 0 ? (token_count / (Time.now - start_time)).round(2) : 0
                       }
-                      save_translation(text, accumulated_output, direction, metrics)
+                      save_translation(text, accumulated_output, source_lang, target_lang, metrics)
                       translation_saved = true
                     end
                     # これ以上の処理を中断
@@ -219,7 +237,7 @@ post '/api/translate' do
                       total_time: total_time.round(3),
                       tokens_per_sec: tokens_per_sec.round(2)
                     }
-                    save_translation(text, accumulated_output, direction, metrics)
+                    save_translation(text, accumulated_output, source_lang, target_lang, metrics)
                     translation_saved = true
                   end
                   
@@ -257,7 +275,7 @@ post '/api/translate' do
                     total_time: total_time.round(3),
                     tokens_per_sec: tokens_per_sec.round(2)
                   }
-                  save_translation(text, accumulated_output, direction, metrics)
+                  save_translation(text, accumulated_output, source_lang, target_lang, metrics)
                   translation_saved = true
                 end
                 

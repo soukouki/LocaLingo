@@ -15,30 +15,93 @@
         <p class="text-gray-600">ローカルLLMによる翻訳サービス</p>
       </header>
 
-      <div class="flex justify-center mb-6">
-        <div class="inline-flex rounded-lg border border-gray-300 bg-white p-1">
-          <button
-            @click="direction = 'en-ja'"
-            :class="direction === 'en-ja' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'"
-            class="px-6 py-2 rounded-md font-medium transition-colors"
-          >
-            英語 → 日本語
-          </button>
-          <button
-            @click="direction = 'ja-en'"
-            :class="direction === 'ja-en' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'"
-            class="px-6 py-2 rounded-md font-medium transition-colors"
-          >
-            日本語 → 英語
-          </button>
-        </div>
+      <!-- 言語選択UI -->
+      <div class="flex justify-center mb-6 gap-3">
+        <!-- クイック切り替え: 自動検知モード -->
+        <button
+          @click="setAutoMode"
+          :class="isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
+          class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+          <span>英語 ⇄ 日本語</span>
+        </button>
+
+        <!-- 詳細設定ボタン -->
+        <button
+          @click="showLanguageSelector = !showLanguageSelector"
+          :class="!isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
+          class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+          </svg>
+          <span>{{ !isAutoMode ? getLanguageName(sourceLang) + ' → ' + getLanguageName(targetLang) : '他の言語' }}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" :class="showLanguageSelector ? 'rotate-180' : ''" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
+
+      <!-- 言語選択パネル -->
+      <transition name="slide">
+        <div v-if="showLanguageSelector" class="mb-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div class="grid md:grid-cols-2 gap-6">
+            <!-- 入力言語 -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳元の言語</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="lang in languages"
+                  :key="'source-' + lang.code"
+                  @click="sourceLang = lang.code"
+                  :class="sourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
+                >
+                  {{ lang.flag }} {{ lang.name }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 出力言語 -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳先の言語</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="lang in languages"
+                  :key="'target-' + lang.code"
+                  @click="targetLang = lang.code"
+                  :class="targetLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
+                >
+                  {{ lang.flag }} {{ lang.name }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 言語を入れ替えボタン -->
+          <div class="flex justify-center mt-4">
+            <button
+              @click="swapLanguages"
+              class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              言語を入れ替える
+            </button>
+          </div>
+        </div>
+      </transition>
 
       <div class="grid md:grid-cols-2 gap-6">
         <div class="bg-white rounded-lg shadow-md p-6">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-lg font-semibold text-gray-800">
-              {{ direction === 'en-ja' ? '英語' : '日本語' }}
+              {{ getInputLanguageLabel() }}
             </h2>
             <button
               v-if="inputText"
@@ -53,7 +116,7 @@
           </div>
           <textarea
             v-model="inputText"
-            :placeholder="direction === 'en-ja' ? 'Enter English text...' : '日本語を入力してください...'"
+            :placeholder="getInputPlaceholder()"
             class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             :style="{ minHeight: '16rem', height: textareaHeight }"
             @input="adjustHeight"
@@ -74,13 +137,13 @@
         <div class="bg-white rounded-lg shadow-md p-6">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-lg font-semibold text-gray-800">
-              {{ direction === 'en-ja' ? '日本語' : '英語' }}
+              {{ getOutputLanguageLabel() }}
             </h2>
             <button
               v-if="outputText"
               @click="copyToClipboard"
               class="text-gray-400 hover:text-gray-600 transition-colors"
-              :title="copied ? 'コピーしました！' : 'コピー'"
+              :title="copied ? 'コピーしました!' : 'コピー'"
             >
               <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -125,10 +188,10 @@
         </div>
         <div v-if="showNotice" class="mt-4 max-w-2xl mx-auto">
           <div class="bg-gray-50 border border-gray-200 rounded-md p-4 text-xs text-gray-600 space-y-2">
-            <ul class="list-disc">
+            <ul class="list-disc pl-4 space-y-1">
               <li>翻訳の入力・出力内容は記録され、サービス改善のために使用されます。</li>
               <li>本サービスは個人GPUで稼働しているため、アクセス集中時やメンテナンス時などには利用できない場合があります。</li>
-              <li>本サービスは株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015">plamo-2-translate</a>を利用しています。</li>
+              <li>本サービスは株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015" class="text-blue-500 hover:underline">plamo-2-translate</a>を利用しています。</li>
               <li>本サービスの利用により生じた損害について、運営者は一切の責任を負いかねます。自己責任でご利用ください。</li>
             </ul>
           </div>
@@ -143,19 +206,81 @@
     createApp({
       data() {
         return {
-          direction: 'en-ja',
+          // 言語設定
+          sourceLang: 'auto',
+          targetLang: 'auto',
+          showLanguageSelector: false,
+          languages: [
+            { code: 'ja', name: '日本語', flag: '🇯🇵' },
+            { code: 'ja-easy', name: '日本語(やさしい)', flag: '🇯🇵' },
+            { code: 'en', name: '英語', flag: '🇬🇧' },
+            { code: 'zh', name: '中国語(簡体字)', flag: '🇨🇳' },
+            { code: 'zh-tw', name: '中国語(繁体字)', flag: '🇹🇼' },
+            { code: 'ko', name: '韓国語', flag: '🇰🇷' },
+            { code: 'ar', name: 'アラビア語', flag: '🇸🇦' },
+            { code: 'it', name: 'イタリア語', flag: '🇮🇹' },
+            { code: 'id', name: 'インドネシア語', flag: '🇮🇩' },
+            { code: 'nl', name: 'オランダ語', flag: '🇳🇱' },
+            { code: 'es', name: 'スペイン語', flag: '🇪🇸' },
+            { code: 'th', name: 'タイ語', flag: '🇹🇭' },
+            { code: 'de', name: 'ドイツ語', flag: '🇩🇪' },
+            { code: 'fr', name: 'フランス語', flag: '🇫🇷' },
+            { code: 'vi', name: 'ベトナム語', flag: '🇻🇳' },
+            { code: 'ru', name: 'ロシア語', flag: '🇷🇺' }
+          ],
+          // 翻訳関連
           inputText: '',
           outputText: '',
           isTranslating: false,
           controller: null,
           error: '',
+          // UI
           textareaHeight: '16rem',
           outputHeight: '32rem',
           showNotice: false,
           copied: false
         }
       },
+      computed: {
+        isAutoMode() {
+          return this.sourceLang === 'auto' && this.targetLang === 'auto';
+        }
+      },
       methods: {
+        setAutoMode() {
+          this.sourceLang = 'auto';
+          this.targetLang = 'auto';
+          this.showLanguageSelector = false;
+        },
+        swapLanguages() {
+          const temp = this.sourceLang;
+          this.sourceLang = this.targetLang;
+          this.targetLang = temp;
+        },
+        getLanguageName(code) {
+          if (code === 'auto') return '自動検知';
+          const lang = this.languages.find(l => l.code === code);
+          return lang ? lang.name : code;
+        },
+        getInputLanguageLabel() {
+          if (this.isAutoMode) {
+            return '英語 / 日本語';
+          }
+          return this.getLanguageName(this.sourceLang);
+        },
+        getOutputLanguageLabel() {
+          if (this.isAutoMode) {
+            return '日本語 / 英語';
+          }
+          return this.getLanguageName(this.targetLang);
+        },
+        getInputPlaceholder() {
+          if (this.isAutoMode) {
+            return 'Enter text in English or Japanese...';
+          }
+          const lang = this.languages.find(l => l.code === this.sourceLang);
+          return lang ? `${lang.name}を入力してください...` : 'テキストを入力してください...';
+        },
         adjustHeight(event) {
           const textarea = event.target;
           textarea.style.height = 'auto';
@@ -172,7 +297,8 @@
           this.copied = false;
 
           console.log('Starting translation...');
-          console.log('Direction:', this.direction);
+          console.log('Source:', this.sourceLang);
+          console.log('Target:', this.targetLang);
           console.log('Input text:', this.inputText);
 
           try {
@@ -183,7 +309,8 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 text: this.inputText,
-                direction: this.direction
+                source_lang: this.sourceLang,
+                target_lang: this.targetLang
               }),
               signal: this.controller.signal
             });
@@ -294,5 +421,19 @@
       }
     }).mount('#app');
   </script>
+
+  <style>
+    .slide-enter-active, .slide-leave-active {
+      transition: all 0.3s ease;
+    }
+    .slide-enter-from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    .slide-leave-to {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+  </style>
 </body>
 </html>
