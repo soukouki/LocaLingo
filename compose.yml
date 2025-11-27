@@ -12,11 +12,9 @@ services:
       - ./localingo/data:/app/data
     environment:
       - RACK_ENV=development
-      - LLM_ENDPOINT=http://host.docker.internal:1234
+      - LLM_ENDPOINT=http://host.docker.internal:1234 # Set your LLM endpoint
       - TZ=Asia/Tokyo # Set your timezone
-      # Uncomment to disable saving translations
-      # 翻訳の保存を無効にする場合はコメントアウトを外してください
-      # - SAVE_TRANSLATIONS=false
+      # - SAVE_TRANSLATIONS=false # Uncomment to disable saving translations
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -34,9 +32,9 @@ services:
       - "11007:11007"
     environment:
       - OPENAILIKED_MODEL=plamo-2-translate
-      - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1
+      - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1 # Set your LLM endpoint
       - OPENAILIKED_API_KEY=dummy
-      - OPENAILIKED_STOP_TOKENS="<|plamo:op|> <|plamo:reserved:0x1E|>"
+      - OPENAILIKED_STOP_TOKENS=<|plamo:op|> <|plamo:reserved:0x1E|>
       - OPENAILIKED_MAX_TOKENS=512
       - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
       - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0

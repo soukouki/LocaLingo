@@ -305,7 +305,7 @@
         </div>
 
         <!-- 進捗表示 -->
-        <div v-if="isPdfTranslating || pdfProgress.status === 'success'" class="bg-white rounded-lg shadow-md p-6">
+        <div v-if="isPdfTranslating || pdfStatus === 'success'" class="bg-white rounded-lg shadow-md p-6">
           <h3 class="text-lg font-semibold text-gray-800 mb-4">翻訳進捗</h3>
           
           <!-- プログレスバー -->
@@ -321,8 +321,8 @@
               ></div>
             </div>
             <div class="flex justify-between text-xs text-gray-500 mt-2">
-              <span>経過時間: {{ pdfProgress.elapsed || 0 }}秒</span>
-              <span v-if="pdfProgress.estimated_remaining">残り約 {{ pdfProgress.estimated_remaining }}秒</span>
+              <span>経過時間: {{ pdfElapsedTime }}秒</span>
+              <span v-if="pdfEstimatedRemaining > 0">残り約 {{ pdfEstimatedRemaining }}秒</span>
             </div>
           </div>
 
@@ -337,16 +337,16 @@
           </div>
 
           <!-- 完了後のダウンロードボタン -->
-          <div v-if="pdfProgress.status === 'success'" class="space-y-3">
+          <div v-if="pdfStatus === 'success'" class="space-y-3">
             <div class="flex items-center gap-2 text-green-600 mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span class="font-medium">翻訳が完了しました！（{{ pdfProgress.elapsed }}秒）</span>
+              <span class="font-medium">翻訳が完了しました！（{{ pdfElapsedTime }}秒）</span>
             </div>
             
             <a
-              :href="pdfProgress.dual_url"
+              :href="pdfDualUrl"
               download
               class="flex items-center justify-center gap-2 w-full py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition-colors"
             >
@@ -357,7 +357,7 @@
             </a>
             
             <a
-              :href="pdfProgress.mono_url"
+              :href="pdfMonoUrl"
               download
               class="flex items-center justify-center gap-2 w-full py-3 px-4 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md transition-colors"
             >
@@ -399,7 +399,7 @@
             <ul class="list-disc pl-4 space-y-1">
               <li>翻訳の入力・出力内容は記録され、サービス改善のために使用されます。</li>
               <li>本サービスは個人GPUで稼働しているため、アクセス集中時やメンテナンス時などには利用できない場合があります。</li>
-              <li>本サービスは株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015" class="text-blue-500 hover:underline">plamo-2-translate</a>を利用しています。</li>
+              <li>翻訳には株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015" class="text-blue-500 hover:underline">plamo-2-translate</a>を利用しています。</li>
               <li>PDF翻訳機能は<a href="https://github.com/Byaidu/PDFMathTranslate" class="text-blue-500 hover:underline">PDFMathTranslate</a>を利用しています。</li>
               <li>本サービスの利用により生じた損害について、運営者は一切の責任を負いかねます。自己責任でご利用ください。</li>
             </ul>
@@ -479,8 +479,15 @@
           isDragging: false,
           isPdfTranslating: false,
           pdfTaskId: null,
+          pdfStatus: null,
           pdfProgress: {},
           pdfError: '',
+          pdfMonoUrl: '',
+          pdfDualUrl: '',
+          pdfPollingInterval: null,
+          pdfStartTime: null,
+          pdfElapsedTime: 0,
+          pdfEstimatedRemaining: 0,
           
           // その他
           showNotice: false
@@ -499,7 +506,6 @@
           this.showLanguageSelector = false;
         },
         swapLanguages() {
-          // ja-easyがsourceLangに設定されないようチェック
           const temp = this.sourceLang;
           const newSourceLang = this.targetLang === 'ja-easy' ? 'ja' : this.targetLang;
           this.sourceLang = newSourceLang;
@@ -545,9 +551,6 @@
           this.copied = false;
 
           console.log('Starting text translation...');
-          console.log('Source:', this.sourceLang);
-          console.log('Target:', this.targetLang);
-          console.log('Input text:', this.inputText);
 
           try {
             this.textController = new AbortController();
@@ -563,22 +566,16 @@
               signal: this.textController.signal
             });
 
-            console.log('Response status:', response.status);
-
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let tokenCount = 0;
 
             while (true) {
               const { done, value } = await reader.read();
-              if (done) {
-                console.log('Stream ended');
-                break;
-              }
+              if (done) break;
 
               const chunk = decoder.decode(value);
               const lines = chunk.split('\n');
@@ -586,32 +583,26 @@
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   const data = line.slice(6).trim();
-                  
-                  console.log('Received data:', data);
 
                   try {
                     const json = JSON.parse(data);
                     
                     if (json.token) {
-                      tokenCount++;
-                      console.log(`Token #${tokenCount}:`, json.token);
                       this.outputText += json.token;
                     }
                     
                     if (json.done) {
-                      console.log('Translation completed');
                       this.isTranslating = false;
                       return;
                     }
                     
                     if (json.error) {
                       this.error = json.error;
-                      console.error('Server error:', json.error);
                       this.isTranslating = false;
                       return;
                     }
                   } catch (e) {
-                    console.error('JSON parse error:', e, 'Data:', data);
+                    console.error('JSON parse error:', e);
                   }
                 }
               }
@@ -628,7 +619,7 @@
             this.isTranslating = false;
           }
         },
-        async stopText() {
+        stopText() {
           if (this.textController) {
             this.textController.abort();
             this.isTranslating = false;
@@ -660,10 +651,6 @@
             }, 2000);
           } catch (err) {
             console.error('Failed to copy:', err);
-            this.error = 'コピーに失敗しました';
-            setTimeout(() => {
-              this.error = '';
-            }, 2000);
           }
         },
         
@@ -696,13 +683,12 @@
           if (!this.pdfFile) return;
 
           this.isPdfTranslating = true;
+          this.pdfStatus = null;
           this.pdfProgress = {};
           this.pdfError = '';
+          this.pdfStartTime = Date.now();
 
           console.log('Starting PDF translation...');
-          console.log('File:', this.pdfFile.name);
-          console.log('Source:', this.pdfSourceLang);
-          console.log('Target:', this.pdfTargetLang);
 
           try {
             const formData = new FormData();
@@ -710,6 +696,7 @@
             formData.append('source_lang', this.pdfSourceLang);
             formData.append('target_lang', this.pdfTargetLang);
 
+            // タスク開始
             const response = await fetch('/api/translate-pdf', {
               method: 'POST',
               body: formData
@@ -719,56 +706,80 @@
               throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                console.log('PDF translation stream ended');
-                break;
-              }
-
-              const chunk = decoder.decode(value);
-              const lines = chunk.split('\n');
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6).trim();
-                  
-                  try {
-                    const json = JSON.parse(data);
-                    console.log('PDF progress:', json);
-                    
-                    if (json.task_id) {
-                      this.pdfTaskId = json.task_id;
-                    }
-                    
-                    if (json.status) {
-                      this.pdfProgress = json;
-                      
-                      if (json.status === 'success') {
-                        this.isPdfTranslating = false;
-                      }
-                    }
-                    
-                    if (json.error) {
-                      this.pdfError = json.error;
-                      this.isPdfTranslating = false;
-                      return;
-                    }
-                  } catch (e) {
-                    console.error('JSON parse error:', e, 'Data:', data);
-                  }
-                }
-              }
+            const result = await response.json();
+            
+            if (result.error) {
+              this.pdfError = result.error;
+              this.isPdfTranslating = false;
+              return;
             }
+
+            this.pdfTaskId = result.task_id;
+            console.log('Task ID:', this.pdfTaskId);
+
+            // ポーリング開始（0.5秒ごと）
+            this.pdfPollingInterval = setInterval(() => {
+              this.checkPdfStatus();
+            }, 500);
 
           } catch (err) {
             this.pdfError = `エラーが発生しました: ${err.message}`;
             console.error('PDF translation error:', err);
-          } finally {
             this.isPdfTranslating = false;
+          }
+        },
+        async checkPdfStatus() {
+          if (!this.pdfTaskId) return;
+
+          try {
+            const response = await fetch(`/api/translate-pdf/${this.pdfTaskId}/status`);
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const status = await response.json();
+            console.log('PDF Status:', status);
+
+            // 経過時間の計算
+            this.pdfElapsedTime = Math.floor((Date.now() - this.pdfStartTime) / 1000);
+
+            if (status.status === 'progress') {
+              this.pdfProgress = status;
+              
+              // 推定残り時間の計算
+              if (status.current > 0 && status.total > 0) {
+                const estimatedTotalTime = this.pdfElapsedTime / status.current * status.total;
+                this.pdfEstimatedRemaining = Math.floor(estimatedTotalTime - this.pdfElapsedTime);
+              }
+              
+            } else if (status.status === 'success') {
+              this.pdfStatus = 'success';
+              this.pdfMonoUrl = status.mono_url;
+              this.pdfDualUrl = status.dual_url;
+              this.isPdfTranslating = false;
+              this.stopPdfPolling();
+              console.log('PDF translation completed');
+              
+            } else if (status.status === 'error') {
+              this.pdfError = status.message || '翻訳に失敗しました';
+              this.isPdfTranslating = false;
+              this.stopPdfPolling();
+              
+            } else if (status.status === 'cancelled') {
+              this.pdfError = '翻訳が中止されました';
+              this.isPdfTranslating = false;
+              this.stopPdfPolling();
+            }
+
+          } catch (err) {
+            console.error('Status check error:', err);
+          }
+        },
+        stopPdfPolling() {
+          if (this.pdfPollingInterval) {
+            clearInterval(this.pdfPollingInterval);
+            this.pdfPollingInterval = null;
           }
         },
         async stopPdf() {
@@ -783,6 +794,7 @@
               console.log('PDF translation stopped');
               this.isPdfTranslating = false;
               this.pdfError = '翻訳を中止しました';
+              this.stopPdfPolling();
             }
           } catch (err) {
             console.error('Failed to stop PDF translation:', err);
@@ -790,13 +802,23 @@
         },
         resetPdf() {
           this.pdfFile = null;
+          this.pdfStatus = null;
           this.pdfProgress = {};
           this.pdfError = '';
           this.pdfTaskId = null;
+          this.pdfMonoUrl = '';
+          this.pdfDualUrl = '';
+          this.pdfElapsedTime = 0;
+          this.pdfEstimatedRemaining = 0;
+          this.stopPdfPolling();
           if (this.$refs.fileInput) {
             this.$refs.fileInput.value = '';
           }
         }
+      },
+      beforeUnmount() {
+        // コンポーネント破棄時にポーリングを停止
+        this.stopPdfPolling();
       }
     }).mount('#app');
   </script>
