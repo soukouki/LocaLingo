@@ -22,6 +22,9 @@ TRANSLATIONS_FILE = 'data/translations.json'
 PDF_DIR = 'data/pdfs'
 SAVE_TRANSLATIONS = ENV['SAVE_TRANSLATIONS'] != 'false'
 
+# PDF翻訳タスクのメタデータを一時保存するハッシュ
+PDF_TASK_METADATA = {}
+
 # ディレクトリ作成
 FileUtils.mkdir_p(File.dirname(TRANSLATIONS_FILE))
 FileUtils.mkdir_p(PDF_DIR)
@@ -281,8 +284,8 @@ post '/api/translate-pdf' do
     original_filename = pdf_file[:filename]
     logger.info "=== PDF Translation Request ==="
     logger.info "File: #{original_filename}"
-    logger.info "Source: #{source_lang}"
-    logger.info "Target: #{target_lang}"
+    logger.info "Source: #{source_lang}(#{LANGUAGE_MAP[source_lang]})"
+    logger.info "Target: #{target_lang}(#{LANGUAGE_MAP[target_lang]})"
 
     lang_in = LANGUAGE_MAP[source_lang] || 'English'
     lang_out = LANGUAGE_MAP[target_lang] || 'Japanese'
@@ -353,6 +356,15 @@ post '/api/translate-pdf' do
     pdf_file[:tempfile].rewind
     File.open(saved_path, 'wb') { |f| f.write(pdf_file[:tempfile].read) }
     logger.info "Original PDF saved: #{saved_path}"
+
+    # タスク情報を一時保存（完了後の記録用）
+    PDF_TASK_METADATA[task_id] = {
+      filename: original_filename,
+      source_lang: source_lang,
+      target_lang: target_lang,
+      pages: pages,
+      start_time: Time.now
+    }
 
     # タスクIDを返す
     { task_id: task_id }.to_json
@@ -443,6 +455,26 @@ get '/api/translate-pdf/:task_id/status' do
           logger.error "Failed to download dual: #{e.message}"
         end
       end
+
+      # 保存設定が有効で、かつ未保存の場合のみ記録（1回だけ実行）
+      if PDF_TASK_METADATA.key?(task_id) && SAVE_TRANSLATIONS
+        meta = PDF_TASK_METADATA.delete(task_id) # 取得と同時に削除して重複保存を防止
+        end_time = Time.now
+        duration = end_time - meta[:start_time]
+        
+        metrics = {
+          total_time: duration.round(3)
+        }
+        
+        save_pdf_translation(
+          task_id,
+          meta[:filename],
+          meta[:source_lang],
+          meta[:target_lang],
+          meta[:pages],
+          metrics
+        )
+      end
       
       {
         status: 'success',
@@ -451,6 +483,7 @@ get '/api/translate-pdf/:task_id/status' do
       }.to_json
       
     elsif state == 'FAILURE'
+      PDF_TASK_METADATA.delete(task_id) # 失敗時はメタデータを削除
       { status: 'error', message: '翻訳に失敗しました' }.to_json
       
     else
@@ -507,6 +540,7 @@ delete '/api/translate-pdf/:task_id' do
     
     if response.code == '200' || response.code == '404'
       logger.info "Task #{task_id} deleted"
+      PDF_TASK_METADATA.delete(task_id) # 中止時もメタデータを削除
       { success: true }.to_json
     else
       logger.error "Failed to delete task: #{response.code}"
