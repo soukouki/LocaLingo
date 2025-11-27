@@ -71,8 +71,6 @@ get '/' do
   send_file File.join(settings.public_folder, 'index.html')
 end
 
-class StopInference < StandardError; end
-
 # 翻訳APIエンドポイント(Server-Sent Events形式でストリーミング)
 post '/api/translate' do
   content_type 'text/event-stream'
@@ -118,7 +116,8 @@ post '/api/translate' do
           messages: [
             { role: 'user', content: prompt }
           ],
-          stream: true  # ストリーミングモードを有効化
+          stop: ["<|plamo:op|>", "<|plamo:reserved:0x1E|>"],
+          stream: true, # ストリーミングモードを有効化
         }.to_json
 
         logger.info "Sending request to LLM..."
@@ -155,7 +154,7 @@ post '/api/translate' do
               next unless line.start_with?('data: ')
 
               data = line.sub('data: ', '').strip
-              
+
               # ストリーム終了シグナル
               if data == '[DONE]'
                 end_time = Time.now
@@ -189,24 +188,6 @@ post '/api/translate' do
                 content = json.dig('choices', 0, 'delta', 'content')
                 
                 if content
-                  # plamo-2-translateにおいて、このトークンが出てきたら翻訳失敗を意味する
-                  if content.include?("<|plamo:reserved:0x1E|>")
-                    logger.error "Translation failed token detected."
-                    out << "data: #{JSON.generate({ error: "翻訳に失敗しました。" })}\n\n"
-                    if SAVE_TRANSLATIONS && !translation_saved
-                      metrics = {
-                        token_count: token_count,
-                        time_to_first_token: first_token_time ? (first_token_time - start_time).round(3) : 0,
-                        total_time: (Time.now - start_time).round(3),
-                        tokens_per_sec: token_count > 0 ? (token_count / (Time.now - start_time)).round(2) : 0
-                      }
-                      save_translation(text, accumulated_output, source_lang, target_lang, metrics)
-                      translation_saved = true
-                    end
-                    # これ以上の処理を中断
-                    raise StopInference
-                  end
-                  
                   token_count += 1
                   first_token_time ||= Time.now  # 最初のトークン受信時刻を記録
                   accumulated_output += content
@@ -241,7 +222,12 @@ post '/api/translate' do
                     translation_saved = true
                   end
                   
-                  out << "data: #{JSON.generate({ done: true })}\n\n"
+                  if token_count == 0
+                    logger.warn "No tokens were generated before finish."
+                    out << "data: #{JSON.generate({ error: "翻訳に失敗しました" })}\n\n"
+                  else
+                    out << "data: #{JSON.generate({ done: true })}\n\n"
+                  end
                   next
                 end
               rescue JSON::ParserError => e
