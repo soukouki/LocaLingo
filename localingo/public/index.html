@@ -15,49 +15,206 @@
         <p class="text-gray-600">ローカルLLMによる翻訳サービス</p>
       </header>
 
-      <!-- 言語選択UI -->
-      <div class="flex justify-center mb-6 gap-3">
-        <!-- クイック切り替え: 自動検知モード -->
+      <!-- タブ切り替え -->
+      <div class="flex justify-center mb-6 gap-2 bg-white rounded-lg p-1 shadow-md max-w-md mx-auto">
         <button
-          @click="setAutoMode"
-          :class="isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
-          class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+          @click="activeTab = 'text'"
+          :class="activeTab === 'text' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          class="flex-1 px-6 py-2.5 rounded-md font-medium transition-all flex items-center justify-center gap-2"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <span>英語 ⇄ 日本語</span>
+          <span>テキスト翻訳</span>
         </button>
-
-        <!-- 詳細設定ボタン -->
         <button
-          @click="showLanguageSelector = !showLanguageSelector"
-          :class="!isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
-          class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+          @click="activeTab = 'pdf'"
+          :class="activeTab === 'pdf' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          class="flex-1 px-6 py-2.5 rounded-md font-medium transition-all flex items-center justify-center gap-2"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
-          <span>{{ !isAutoMode ? getLanguageName(sourceLang) + ' → ' + getLanguageName(targetLang) : '他の言語' }}</span>
-          <svg xmlns="http://www.w3.org/2000/svg" :class="showLanguageSelector ? 'rotate-180' : ''" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
+          <span>PDF翻訳</span>
         </button>
       </div>
 
-      <!-- 言語選択パネル -->
-      <transition name="slide">
-        <div v-if="showLanguageSelector" class="mb-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+      <!-- テキスト翻訳タブ -->
+      <div v-show="activeTab === 'text'">
+        <!-- 言語選択UI -->
+        <div class="flex justify-center mb-6 gap-3">
+          <!-- クイック切り替え: 自動検知モード -->
+          <button
+            @click="setAutoMode"
+            :class="isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
+            class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+            <span>英語 ⇄ 日本語</span>
+          </button>
+
+          <!-- 詳細設定ボタン -->
+          <button
+            @click="showLanguageSelector = !showLanguageSelector"
+            :class="!isAutoMode ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50'"
+            class="px-6 py-2.5 rounded-lg font-medium transition-all border border-gray-300 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+            <span>{{ !isAutoMode ? getLanguageName(sourceLang) + ' → ' + getLanguageName(targetLang) : '他の言語' }}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" :class="showLanguageSelector ? 'rotate-180' : ''" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 言語選択パネル -->
+        <transition name="slide">
+          <div v-if="showLanguageSelector" class="mb-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+            <div class="grid md:grid-cols-2 gap-6">
+              <!-- 入力言語 -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳元の言語</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    v-for="lang in sourceLanguages"
+                    :key="'source-' + lang.code"
+                    @click="sourceLang = lang.code"
+                    :class="sourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                    class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
+                  >
+                    {{ lang.flag }} {{ lang.name }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 出力言語 -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳先の言語</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    v-for="lang in targetLanguages"
+                    :key="'target-' + lang.code"
+                    @click="targetLang = lang.code"
+                    :class="targetLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                    class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
+                  >
+                    {{ lang.flag }} {{ lang.name }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 言語を入れ替えボタン -->
+            <div class="flex justify-center mt-4">
+              <button
+                @click="swapLanguages"
+                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                言語を入れ替える
+              </button>
+            </div>
+          </div>
+        </transition>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-semibold text-gray-800">
+                {{ getInputLanguageLabel() }}
+              </h2>
+              <button
+                v-if="inputText"
+                @click="clearInput"
+                class="text-gray-400 hover:text-gray-600 transition-colors"
+                title="クリア"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <textarea
+              v-model="inputText"
+              :placeholder="getInputPlaceholder()"
+              class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              :style="{ minHeight: '16rem', height: textareaHeight }"
+              @input="adjustHeight"
+              :disabled="isTranslating"
+            ></textarea>
+            <div class="mt-4">
+              <button
+                @click="translateText"
+                :disabled="isTranslating || !inputText.trim()"
+                :class="isTranslating || !inputText.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'"
+                class="w-full py-3 px-4 text-white font-medium rounded-md transition-colors"
+              >
+                {{ isTranslating ? '翻訳中...' : '翻訳する' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-semibold text-gray-800">
+                {{ getOutputLanguageLabel() }}
+              </h2>
+              <button
+                v-if="outputText"
+                @click="copyToClipboard"
+                class="text-gray-400 hover:text-gray-600 transition-colors"
+                :title="copied ? 'コピーしました!' : 'コピー'"
+              >
+                <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="w-full p-3 border border-gray-300 rounded-md bg-gray-50 overflow-y-auto"
+              :style="{ minHeight: '16rem', maxHeight: outputHeight }"
+            >
+              <p v-if="outputText" class="whitespace-pre-wrap">{{ outputText }}</p>
+              <p v-else class="text-gray-400">翻訳結果がここに表示されます</p>
+            </div>
+            <div class="mt-4" v-if="isTranslating">
+              <button
+                @click="stopText"
+                class="w-full py-3 px-4 bg-red-500 hover:bg-red-600 text-white font-medium rounded-md transition-colors"
+              >
+                停止する
+              </button>
+            </div>
+            <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p class="text-red-600 text-sm">{{ error }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PDF翻訳タブ -->
+      <div v-show="activeTab === 'pdf'">
+        <!-- PDF言語選択 -->
+        <div class="mb-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div class="grid md:grid-cols-2 gap-6">
             <!-- 入力言語 -->
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳元の言語</label>
               <div class="grid grid-cols-2 gap-2">
                 <button
-                  v-for="lang in languages"
-                  :key="'source-' + lang.code"
-                  @click="sourceLang = lang.code"
-                  :class="sourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  v-for="lang in sourceLanguages"
+                  :key="'pdf-source-' + lang.code"
+                  @click="pdfSourceLang = lang.code"
+                  :class="pdfSourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
                 >
                   {{ lang.flag }} {{ lang.name }}
@@ -70,10 +227,10 @@
               <label class="block text-sm font-semibold text-gray-700 mb-3">翻訳先の言語</label>
               <div class="grid grid-cols-2 gap-2">
                 <button
-                  v-for="lang in languages"
-                  :key="'target-' + lang.code"
-                  @click="targetLang = lang.code"
-                  :class="targetLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  v-for="lang in targetLanguages"
+                  :key="'pdf-target-' + lang.code"
+                  @click="pdfTargetLang = lang.code"
+                  :class="pdfTargetLang === lang.code ? 'bg-blue-500 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   class="px-4 py-2.5 rounded-md text-sm font-medium transition-colors border border-gray-200"
                 >
                   {{ lang.flag }} {{ lang.name }}
@@ -81,95 +238,146 @@
               </div>
             </div>
           </div>
-
-          <!-- 言語を入れ替えボタン -->
-          <div class="flex justify-center mt-4">
-            <button
-              @click="swapLanguages"
-              class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              言語を入れ替える
-            </button>
-          </div>
         </div>
-      </transition>
 
-      <div class="grid md:grid-cols-2 gap-6">
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-lg font-semibold text-gray-800">
-              {{ getInputLanguageLabel() }}
-            </h2>
-            <button
-              v-if="inputText"
-              @click="clearInput"
-              class="text-gray-400 hover:text-gray-600 transition-colors"
-              title="クリア"
+        <!-- PDFアップロードエリア -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+          <label class="block text-sm font-semibold text-gray-700 mb-3">PDFファイル</label>
+          <div
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="handleDrop"
+            :class="isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'"
+            class="border-2 border-dashed rounded-lg p-8 text-center transition-colors"
+          >
+            <input
+              type="file"
+              ref="fileInput"
+              @change="handleFileSelect"
+              accept="application/pdf"
+              class="hidden"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            <div v-if="!pdfFile">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-            </button>
+              <p class="text-gray-600 mb-2">PDFファイルをドラッグ&ドロップ</p>
+              <p class="text-gray-400 text-sm mb-4">または</p>
+              <button
+                @click="$refs.fileInput.click()"
+                class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-medium transition-colors"
+              >
+                ファイルを選択
+              </button>
+            </div>
+            <div v-else class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <div class="text-left">
+                  <p class="font-medium text-gray-800">{{ pdfFile.name }}</p>
+                  <p class="text-sm text-gray-500">{{ formatFileSize(pdfFile.size) }}</p>
+                </div>
+              </div>
+              <button
+                @click="clearPdf"
+                class="text-red-500 hover:text-red-700 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <textarea
-            v-model="inputText"
-            :placeholder="getInputPlaceholder()"
-            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            :style="{ minHeight: '16rem', height: textareaHeight }"
-            @input="adjustHeight"
-            :disabled="isTranslating"
-          ></textarea>
+
+          <!-- 翻訳ボタン -->
           <div class="mt-4">
             <button
-              @click="translate"
-              :disabled="isTranslating || !inputText.trim()"
-              :class="isTranslating || !inputText.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'"
+              @click="translatePdf"
+              :disabled="isPdfTranslating || !pdfFile"
+              :class="isPdfTranslating || !pdfFile ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'"
               class="w-full py-3 px-4 text-white font-medium rounded-md transition-colors"
             >
-              {{ isTranslating ? '翻訳中...' : '翻訳する' }}
+              {{ isPdfTranslating ? '翻訳中...' : 'PDF翻訳を開始' }}
             </button>
           </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-lg font-semibold text-gray-800">
-              {{ getOutputLanguageLabel() }}
-            </h2>
+        <!-- 進捗表示 -->
+        <div v-if="isPdfTranslating || pdfProgress.status === 'success'" class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">翻訳進捗</h3>
+          
+          <!-- プログレスバー -->
+          <div v-if="isPdfTranslating" class="mb-4">
+            <div class="flex justify-between text-sm text-gray-600 mb-2">
+              <span>{{ pdfProgress.current || 0 }} / {{ pdfProgress.total || 0 }} ページ</span>
+              <span>{{ pdfProgress.progress || 0 }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                :style="{ width: (pdfProgress.progress || 0) + '%' }"
+              ></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500 mt-2">
+              <span>経過時間: {{ pdfProgress.elapsed || 0 }}秒</span>
+              <span v-if="pdfProgress.estimated_remaining">残り約 {{ pdfProgress.estimated_remaining }}秒</span>
+            </div>
+          </div>
+
+          <!-- 中止ボタン -->
+          <div v-if="isPdfTranslating" class="mb-4">
             <button
-              v-if="outputText"
-              @click="copyToClipboard"
-              class="text-gray-400 hover:text-gray-600 transition-colors"
-              :title="copied ? 'コピーしました!' : 'コピー'"
+              @click="stopPdf"
+              class="w-full py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white font-medium rounded-md transition-colors"
             >
-              <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+              翻訳を中止
             </button>
           </div>
-          <div
-            class="w-full p-3 border border-gray-300 rounded-md bg-gray-50 overflow-y-auto"
-            :style="{ minHeight: '16rem', maxHeight: outputHeight }"
-          >
-            <p v-if="outputText" class="whitespace-pre-wrap">{{ outputText }}</p>
-            <p v-else class="text-gray-400">翻訳結果がここに表示されます</p>
-          </div>
-          <div class="mt-4" v-if="isTranslating">
-            <button
-              @click="stop"
-              class="w-full py-3 px-4 bg-red-500 hover:bg-red-600 text-white font-medium rounded-md transition-colors"
+
+          <!-- 完了後のダウンロードボタン -->
+          <div v-if="pdfProgress.status === 'success'" class="space-y-3">
+            <div class="flex items-center gap-2 text-green-600 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="font-medium">翻訳が完了しました！（{{ pdfProgress.elapsed }}秒）</span>
+            </div>
+            
+            <a
+              :href="pdfProgress.dual_url"
+              download
+              class="flex items-center justify-center gap-2 w-full py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition-colors"
             >
-              停止する
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              対訳版をダウンロード
+            </a>
+            
+            <a
+              :href="pdfProgress.mono_url"
+              download
+              class="flex items-center justify-center gap-2 w-full py-3 px-4 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              翻訳のみ版をダウンロード
+            </a>
+
+            <button
+              @click="resetPdf"
+              class="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium rounded-md transition-colors"
+            >
+              新しいPDFを翻訳
             </button>
           </div>
-          <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p class="text-red-600 text-sm">{{ error }}</p>
+
+          <!-- エラー表示 -->
+          <div v-if="pdfError" class="p-3 bg-red-50 border border-red-200 rounded-md">
+            <p class="text-red-600 text-sm">{{ pdfError }}</p>
           </div>
         </div>
       </div>
@@ -192,6 +400,7 @@
               <li>翻訳の入力・出力内容は記録され、サービス改善のために使用されます。</li>
               <li>本サービスは個人GPUで稼働しているため、アクセス集中時やメンテナンス時などには利用できない場合があります。</li>
               <li>本サービスは株式会社Preferred Networksが公開した<a href="https://www.preferred.jp/ja/news/pr20241015" class="text-blue-500 hover:underline">plamo-2-translate</a>を利用しています。</li>
+              <li>PDF翻訳機能は<a href="https://github.com/Byaidu/PDFMathTranslate" class="text-blue-500 hover:underline">PDFMathTranslate</a>を利用しています。</li>
               <li>本サービスの利用により生じた損害について、運営者は一切の責任を負いかねます。自己責任でご利用ください。</li>
             </ul>
           </div>
@@ -206,11 +415,35 @@
     createApp({
       data() {
         return {
+          // タブ管理
+          activeTab: 'text',
+          
           // 言語設定
           sourceLang: 'auto',
           targetLang: 'auto',
           showLanguageSelector: false,
-          languages: [
+          
+          // 翻訳元言語（ja-easyを除く）
+          sourceLanguages: [
+            { code: 'ja', name: '日本語', flag: '🇯🇵' },
+            { code: 'en', name: '英語', flag: '🇬🇧' },
+            { code: 'zh', name: '中国語(簡体字)', flag: '🇨🇳' },
+            { code: 'zh-tw', name: '中国語(繁体字)', flag: '🇹🇼' },
+            { code: 'ko', name: '韓国語', flag: '🇰🇷' },
+            { code: 'ar', name: 'アラビア語', flag: '🇸🇦' },
+            { code: 'it', name: 'イタリア語', flag: '🇮🇹' },
+            { code: 'id', name: 'インドネシア語', flag: '🇮🇩' },
+            { code: 'nl', name: 'オランダ語', flag: '🇳🇱' },
+            { code: 'es', name: 'スペイン語', flag: '🇪🇸' },
+            { code: 'th', name: 'タイ語', flag: '🇹🇭' },
+            { code: 'de', name: 'ドイツ語', flag: '🇩🇪' },
+            { code: 'fr', name: 'フランス語', flag: '🇫🇷' },
+            { code: 'vi', name: 'ベトナム語', flag: '🇻🇳' },
+            { code: 'ru', name: 'ロシア語', flag: '🇷🇺' }
+          ],
+          
+          // 翻訳先言語（ja-easyを含む）
+          targetLanguages: [
             { code: 'ja', name: '日本語', flag: '🇯🇵' },
             { code: 'ja-easy', name: '日本語(やさしい)', flag: '🇯🇵' },
             { code: 'en', name: '英語', flag: '🇬🇧' },
@@ -228,17 +461,29 @@
             { code: 'vi', name: 'ベトナム語', flag: '🇻🇳' },
             { code: 'ru', name: 'ロシア語', flag: '🇷🇺' }
           ],
-          // 翻訳関連
+          
+          // テキスト翻訳関連
           inputText: '',
           outputText: '',
           isTranslating: false,
-          controller: null,
+          textController: null,
           error: '',
-          // UI
           textareaHeight: '16rem',
           outputHeight: '32rem',
-          showNotice: false,
-          copied: false
+          copied: false,
+          
+          // PDF翻訳関連
+          pdfSourceLang: 'en',
+          pdfTargetLang: 'ja',
+          pdfFile: null,
+          isDragging: false,
+          isPdfTranslating: false,
+          pdfTaskId: null,
+          pdfProgress: {},
+          pdfError: '',
+          
+          // その他
+          showNotice: false
         }
       },
       computed: {
@@ -247,19 +492,22 @@
         }
       },
       methods: {
+        // テキスト翻訳メソッド
         setAutoMode() {
           this.sourceLang = 'auto';
           this.targetLang = 'auto';
           this.showLanguageSelector = false;
         },
         swapLanguages() {
+          // ja-easyがsourceLangに設定されないようチェック
           const temp = this.sourceLang;
-          this.sourceLang = this.targetLang;
+          const newSourceLang = this.targetLang === 'ja-easy' ? 'ja' : this.targetLang;
+          this.sourceLang = newSourceLang;
           this.targetLang = temp;
         },
         getLanguageName(code) {
           if (code === 'auto') return '自動検知';
-          const lang = this.languages.find(l => l.code === code);
+          const lang = this.targetLanguages.find(l => l.code === code);
           return lang ? lang.name : code;
         },
         getInputLanguageLabel() {
@@ -278,7 +526,7 @@
           if (this.isAutoMode) {
             return 'Enter text in English or Japanese...';
           }
-          const lang = this.languages.find(l => l.code === this.sourceLang);
+          const lang = this.sourceLanguages.find(l => l.code === this.sourceLang);
           return lang ? `${lang.name}を入力してください...` : 'テキストを入力してください...';
         },
         adjustHeight(event) {
@@ -288,7 +536,7 @@
           this.textareaHeight = `${newHeight}px`;
           this.outputHeight = `${Math.max(512, newHeight * 2)}px`;
         },
-        async translate() {
+        async translateText() {
           if (!this.inputText.trim()) return;
 
           this.isTranslating = true;
@@ -296,15 +544,15 @@
           this.error = '';
           this.copied = false;
 
-          console.log('Starting translation...');
+          console.log('Starting text translation...');
           console.log('Source:', this.sourceLang);
           console.log('Target:', this.targetLang);
           console.log('Input text:', this.inputText);
 
           try {
-            this.controller = new AbortController();
+            this.textController = new AbortController();
 
-            const response = await fetch('/api/translate', {
+            const response = await fetch('/api/translate-text', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -312,7 +560,7 @@
                 source_lang: this.sourceLang,
                 target_lang: this.targetLang
               }),
-              signal: this.controller.signal
+              signal: this.textController.signal
             });
 
             console.log('Response status:', response.status);
@@ -380,9 +628,9 @@
             this.isTranslating = false;
           }
         },
-        async stop() {
-          if (this.controller) {
-            this.controller.abort();
+        async stopText() {
+          if (this.textController) {
+            this.textController.abort();
             this.isTranslating = false;
           }
         },
@@ -416,6 +664,137 @@
             setTimeout(() => {
               this.error = '';
             }, 2000);
+          }
+        },
+        
+        // PDF翻訳メソッド
+        handleFileSelect(event) {
+          const file = event.target.files[0];
+          if (file && file.type === 'application/pdf') {
+            this.pdfFile = file;
+          }
+        },
+        handleDrop(event) {
+          this.isDragging = false;
+          const file = event.dataTransfer.files[0];
+          if (file && file.type === 'application/pdf') {
+            this.pdfFile = file;
+          }
+        },
+        clearPdf() {
+          this.pdfFile = null;
+          if (this.$refs.fileInput) {
+            this.$refs.fileInput.value = '';
+          }
+        },
+        formatFileSize(bytes) {
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+        async translatePdf() {
+          if (!this.pdfFile) return;
+
+          this.isPdfTranslating = true;
+          this.pdfProgress = {};
+          this.pdfError = '';
+
+          console.log('Starting PDF translation...');
+          console.log('File:', this.pdfFile.name);
+          console.log('Source:', this.pdfSourceLang);
+          console.log('Target:', this.pdfTargetLang);
+
+          try {
+            const formData = new FormData();
+            formData.append('file', this.pdfFile);
+            formData.append('source_lang', this.pdfSourceLang);
+            formData.append('target_lang', this.pdfTargetLang);
+
+            const response = await fetch('/api/translate-pdf', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                console.log('PDF translation stream ended');
+                break;
+              }
+
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6).trim();
+                  
+                  try {
+                    const json = JSON.parse(data);
+                    console.log('PDF progress:', json);
+                    
+                    if (json.task_id) {
+                      this.pdfTaskId = json.task_id;
+                    }
+                    
+                    if (json.status) {
+                      this.pdfProgress = json;
+                      
+                      if (json.status === 'success') {
+                        this.isPdfTranslating = false;
+                      }
+                    }
+                    
+                    if (json.error) {
+                      this.pdfError = json.error;
+                      this.isPdfTranslating = false;
+                      return;
+                    }
+                  } catch (e) {
+                    console.error('JSON parse error:', e, 'Data:', data);
+                  }
+                }
+              }
+            }
+
+          } catch (err) {
+            this.pdfError = `エラーが発生しました: ${err.message}`;
+            console.error('PDF translation error:', err);
+          } finally {
+            this.isPdfTranslating = false;
+          }
+        },
+        async stopPdf() {
+          if (!this.pdfTaskId) return;
+
+          try {
+            const response = await fetch(`/api/translate-pdf/${this.pdfTaskId}`, {
+              method: 'DELETE'
+            });
+
+            if (response.ok) {
+              console.log('PDF translation stopped');
+              this.isPdfTranslating = false;
+              this.pdfError = '翻訳を中止しました';
+            }
+          } catch (err) {
+            console.error('Failed to stop PDF translation:', err);
+          }
+        },
+        resetPdf() {
+          this.pdfFile = null;
+          this.pdfProgress = {};
+          this.pdfError = '';
+          this.pdfTaskId = null;
+          if (this.$refs.fileInput) {
+            this.$refs.fileInput.value = '';
           }
         }
       }
