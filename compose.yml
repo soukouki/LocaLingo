@@ -26,6 +26,22 @@ services:
       retries: 3
     restart: unless-stopped
 
+  pdf2zh:
+    build:
+      context: ./pdf2zh
+      dockerfile: Dockerfile
+    ports:
+      - "11007:11007"
+    environment:
+      - OPENAILIKED_MODEL=openai/gpt-oss-20b
+      - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1
+      - OPENAILIKED_API_KEY=dummy
+      - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+      - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
   # Remove this service if you do not want to expose it externally
   # 外部公開しない場合はこのサービスを削除してください
   tunnel:
