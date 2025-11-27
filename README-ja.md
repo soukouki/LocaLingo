@@ -3,13 +3,19 @@
 
 LocaLingoは、Preferred Networksによって開発された翻訳向け特化型大規模言語モデルであるPLaMo翻訳モデルを利用した、翻訳WebUIです。LM StudioやOllamaなどのOpenAI互換APIを持ったローカルLLMサーバーと連携して動作します。
 
-![LocaLingo Screenshot](docs/screenshot.png)
+![LocaLingo Screenshot](docs/screenshot-text.png)
+
+テキストの翻訳だけでなく、PDFファイルの翻訳にも対応しています。PDFMathTranslateというライブラリを利用し、フォーマットを維持したまま翻訳を行います。PDF中に画像や図表が含まれていても問題ありません。(ただし、画像中の文字は翻訳されません。)
+
+![LocaLingo Screenshot](docs/screenshot-pdf.png)
 
 ## 特徴
 
 - **文字長制限なし**: 一般の翻訳ツールでは2000文字程度の制限がありますが、LocaLingoではそのような制限はありません。使用するLLMサーバーの制限に依存しますが、数万、数十万文字の翻訳も可能です。
 - **ローカルでの動作**: インターネット接続が不要で、データのプライバシーを保護できます。すべての翻訳処理はローカル環境で行われます。
 - **使いやすいUI**: 直感的なユーザーインターフェースを提供し、簡単に翻訳作業を行えます。
+- **複数言語対応**: 英語、日本語、中国語、韓国語、フランス語、ドイツ語、スペイン語など、多数の言語間での翻訳が可能です。
+- **PDF翻訳対応**: PDFファイルの翻訳が可能です。フォーマットを維持したまま翻訳を行います。
 
 ## 動作させる手順
 
@@ -44,12 +50,12 @@ PLaMo翻訳モデルは長文翻訳に対応していますが、ほとんどの
 2. 以下のコマンドを実行して、LocaLingoを起動します。
 
 ```bash
-sudo docker-compose up app -d
+sudo docker-compose up -d
 ```
 
 ### Cloudflare Tunnelを用いて外部公開する場合
 
-Cloudflareの詳細な説明は他のドキュメントを参照してください。
+Cloudflareのサービスについての詳細な説明は他のドキュメントを参照してください。
 
 1. compose.ymlを開き、`LLM_ENDPOINT`環境変数を使用しているLLMサーバーのエンドポイントに設定します。
 2. `.env`ファイルを作成し、Cloudflare Tunnelの認証トークンを`TUNNEL_TOKEN`環境変数に設定します。

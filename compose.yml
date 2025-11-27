@@ -35,7 +35,7 @@ services:
       - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1 # Set your LLM endpoint
       - OPENAILIKED_API_KEY=dummy
       - OPENAILIKED_STOP_TOKENS=<|plamo:op|> <|plamo:reserved:0x1E|>
-      - OPENAILIKED_MAX_TOKENS=512
+      - OPENAILIKED_MAX_TOKENS=512 # Short-term restrictions in place in case of LLM runaway incidents
       - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
       - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
     extra_hosts:
