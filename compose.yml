@@ -33,9 +33,11 @@ services:
     ports:
       - "11007:11007"
     environment:
-      - OPENAILIKED_MODEL=openai/gpt-oss-20b
+      - OPENAILIKED_MODEL=plamo-2-translate
       - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1
       - OPENAILIKED_API_KEY=dummy
+      - OPENAILIKED_STOP_TOKENS="<|plamo:op|> <|plamo:reserved:0x1E|>"
+      - OPENAILIKED_MAX_TOKENS=512
       - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
       - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
     extra_hosts:

@@ -1,0 +1,5 @@
+<|plamo:op|>dataset
+translation
+<|plamo:op|>input lang=${lang_in}
+${text}
+<|plamo:op|>output lang=${lang_out}

@@ -18,6 +18,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # pdf2zhはfork版を使用
+RUN echo 20
 RUN git clone --depth 1 \
     --branch openai-stop-and-max-tokens \
     https://github.com/soukouki/PDFMathTranslate.git \
@@ -36,6 +37,8 @@ WORKDIR /app
 
 RUN mkdir -p /etc/supervisor/conf.d
 COPY pdf2zh.conf /etc/supervisor/conf.d/pdf2zh.conf
+
+COPY prompt.txt prompt.txt
 
 WORKDIR /app/PDFMathTranslate
 
