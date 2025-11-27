@@ -292,12 +292,12 @@ post '/api/translate' do
       logger.error "=== Connection Refused ==="
       logger.error "Cannot connect to LLM endpoint: #{LLM_ENDPOINT}"
       logger.error "Please check if the LLM server is running"
-      out << "data: #{JSON.generate({ error: "LLMサーバーに接続できません: #{LLM_ENDPOINT}" })}\n\n"
+      out << "data: #{JSON.generate({ error: "LLMサーバーに接続できません" })}\n\n"
       
     rescue Errno::EHOSTUNREACH => e
       logger.error "=== Host Unreachable ==="
       logger.error "Cannot reach LLM endpoint: #{LLM_ENDPOINT}"
-      out << "data: #{JSON.generate({ error: "LLMサーバーに到達できません: #{LLM_ENDPOINT}" })}\n\n"
+      out << "data: #{JSON.generate({ error: "LLMサーバーに到達できません" })}\n\n"
       
     rescue SocketError => e
       logger.error "=== Socket Error ==="
@@ -321,7 +321,7 @@ end
 # ヘルスチェックエンドポイント
 get '/health' do
   content_type :json
-  { status: 'ok', llm_endpoint: LLM_ENDPOINT }.to_json
+  { status: 'ok' }.to_json
 end
 
 logger.info "=== LocaLingo Starting ==="
