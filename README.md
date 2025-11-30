@@ -38,7 +38,8 @@ curl http://localhost:1234/v1/chat/completions \
         "role": "user",
         "content": "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=English\nHello!\n<|plamo:op|>output lang=Japanese"
       }
-    ]
+    ],
+    "stop": ["<|plamo:op|>", "<|plamo:reserved:0x1E|>"]
   }'
 ```
 
