@@ -17,6 +17,7 @@ set :public_folder, 'public'
 
 # 環境変数から設定を読み込む
 LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
+LLM_MODEL = ENV['LLM_MODEL'] || 'plamo-2-translate'
 PDF_TRANSLATE_ENDPOINT = ENV['PDF_TRANSLATE_ENDPOINT'] || 'http://pdf2zh:11007'
 TRANSLATIONS_FILE = 'data/translations.json'
 PDF_DIR = 'data/pdfs'
@@ -141,7 +142,7 @@ post '/api/translate-text' do
         request = Net::HTTP::Post.new(uri.path)
         request['Content-Type'] = 'application/json'
         request.body = {
-          model: 'plamo-2-translate',
+          model: LLM_MODEL,
           messages: [{ role: 'user', content: prompt }],
           stop: ["<|plamo:op|>", "<|plamo:reserved:0x1E|>"],
           stream: true

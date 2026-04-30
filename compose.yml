@@ -13,6 +13,7 @@ services:
     environment:
       - RACK_ENV=development
       - LLM_ENDPOINT=http://host.docker.internal:1234 # Set your LLM endpoint
+      - LLM_MODEL=plamo-2-translate # Set your model name
       - TZ=Asia/Tokyo # Set your timezone
       # - SAVE_TRANSLATIONS=false # Uncomment to disable saving translations
     extra_hosts:
