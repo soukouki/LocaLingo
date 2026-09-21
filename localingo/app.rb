@@ -18,10 +18,9 @@ set :public_folder, 'public'
 # 環境変数から設定を読み込む
 LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
 LLM_MODEL = ENV['LLM_MODEL'] || 'plamo-2-translate'
-# 汎用LLM向けの追加設定（必要に応じて環境変数で指定）
-LLM_REASONING_EFFORT = ENV['LLM_REASONING_EFFORT'] # thinking effort: none|minimal|low|medium|high|max
-LLM_TEMPERATURE = ENV['LLM_TEMPERATURE']           # 例: "0.1"
-LLM_MAX_TOKENS = ENV['LLM_MAX_TOKENS']             # 例: "16384"
+LLM_REASONING_EFFORT = ENV['LLM_REASONING_EFFORT']
+LLM_TEMPERATURE = ENV['LLM_TEMPERATURE']
+LLM_MAX_TOKENS = ENV['LLM_MAX_TOKENS']
 PDF_TRANSLATE_ENDPOINT = ENV['PDF_TRANSLATE_ENDPOINT'] || 'http://pdf2zh:11007'
 TRANSLATIONS_FILE = 'data/translations.json'
 PDF_DIR = 'data/pdfs'
@@ -34,10 +33,7 @@ PDF_TASK_METADATA = {}
 FileUtils.mkdir_p(File.dirname(TRANSLATIONS_FILE))
 FileUtils.mkdir_p(PDF_DIR)
 
-# 言語マッピング。汎用LLM対応のため、UIで提示する言語に限定。
-# 以前はplamo-2-translateのチャットテンプレートに対応した全言語（ja-easy, zh-tw,
-# ar, id, nl, th, vi, ru）を保持していたが、汎用LLMでは言語を自由に指定できるため
-# 最小のセットに絞る。必要に応じて追加可能。
+# 言語マッピング
 LANGUAGE_MAP = {
   'en' => 'English',
   'ja' => 'Japanese',
@@ -46,6 +42,17 @@ LANGUAGE_MAP = {
   'es' => 'Spanish',
   'fr' => 'French',
   'de' => 'German'
+}
+
+# 翻訳指示のテンプレート
+PROMPT_TEMPLATES = {
+  'ja' => "以下の文章を日本語に翻訳してください。解説などは不要です。単に文章のみを応答してください。",
+  'en' => "Please translate the following text into English. Respond with the translation only. Do not include any explanations or commentary.",
+  'zh' => "请将下面的文字翻译成简体中文。请勿添加任何解释或注释，仅返回译文。",
+  'ko' => "아래의 문장을 한국어로 번역하세요. 설명이나 주석은 하지 말고, 번역된 문장만 답답하세요.",
+  'es' => "Traduce el siguiente texto al español. Responde únicamente con la traducción, sin explicaciones ni comentarios.",
+  'fr' => "Traduisez le texte suivant en français. Répondez uniquement par la traduction, sans explication ni commentaire.",
+  'de' => "Übersetze den folgenden Text ins Deutsche. Antworte nur mit der Übersetzung, ohne Erklärungen oder Kommentare."
 }
 
 # 翻訳履歴を読み込む
@@ -122,19 +129,7 @@ post '/api/translate-text' do
       logger.info "Target: #{target_lang}"
       logger.info "Text length: #{text&.length || 0}"
 
-      # 汎用LLM向けの翻訳指示。以前はplamo-2-translate専用のチャットテンプレート
-      #  (<|plamo:op|>dataset ... input lang= ... output lang=) を利用していたが、
-      # 汎用LLMでは言語名を自然な文の形で指示する形に変更した。
-      # 指示文は英語で書いている（汎用LLMに最も信頼性の高い）。
-      target_name = LANGUAGE_MAP[target_lang] || target_lang
-      if source_lang && source_lang != 'auto'
-        source_name = LANGUAGE_MAP[source_lang] || source_lang
-        prompt = "Translate the following #{source_name} text into #{target_name}. " \
-                 "Respond with the translation only. Do not add any explanation or commentary.\n\n#{text}"
-      else
-        prompt = "Translate the following text into #{target_name}. " \
-                 "Respond with the translation only. Do not add any explanation or commentary.\n\n#{text}"
-      end
+      prompt = (PROMPT_TEMPLATES[target_lang] || PROMPT_TEMPLATES['en']) + "\n\n#{text}"
 
       uri = URI.parse("#{LLM_ENDPOINT}/v1/chat/completions")
 
