@@ -44,12 +44,13 @@
 
       <!-- テキスト翻訳タブ -->
       <div v-show="activeTab === 'text'">
-        <!-- 翻訳先の言語（入力側は自動検知のため選択を省略） -->
-        <div class="flex justify-center mb-6">
+        <!-- 翻訳先の言語とプリセット -->
+        <div class="flex justify-center mb-6 gap-3">
+          <!-- 翻訳先言語 -->
           <div class="relative inline-flex items-center">
             <select
               v-model="targetLang"
-              class="appearance-none pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 cursor-pointer"
+              class="appearance-none pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 cursor:pointer"
             >
               <option
                 v-for="lang in targetLanguages"
@@ -57,6 +58,24 @@
                 :value="lang.code"
               >
                 {{ lang.flag }} {{ lang.name }}
+              </option>
+            </select>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute right-3 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          <!-- プリセット -->
+          <div class="relative inline-flex items-center">
+            <select
+              v-model="preset"
+              class="appearance-none pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 cursor:pointer"
+            >
+              <option
+                v-for="p in presets"
+                :key="p.name"
+                :value="p.name"
+              >
+                {{ p.label }}
               </option>
             </select>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute right-3 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -371,10 +390,14 @@
         return {
           // タブ管理
           activeTab: 'text',
-          
+
           // 言語設定
-          sourceLang: 'auto',
           targetLang: 'ja',
+
+          // プリセット設定
+          preset: '',
+          presets: [],
+          default_preset: '',
           
           // 翻訳元言語（翻訳先の言語と同一の最小セット。非表示のPDFタブで使用）
           sourceLanguages: [
@@ -432,6 +455,18 @@
         }
       },
       computed: {},
+      async mounted() {
+        try {
+          const res = await fetch('/api/presets');
+          if (!res.ok) throw new Error('Failed to load presets');
+          const data = await res.json();
+          this.presets = data.presets || [];
+          this.default_preset = data.default_preset || '';
+          this.preset = this.default_preset || (this.presets[0] ? this.presets[0].name : '');
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
       methods: {
         // テキスト翻訳メソッド
         getLanguageName(code) {
@@ -469,8 +504,8 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 text: this.inputText,
-                source_lang: this.sourceLang,
-                target_lang: this.targetLang
+                target_lang: this.targetLang,
+                preset: this.preset
               }),
               signal: this.textController.signal
             });

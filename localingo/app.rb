@@ -4,6 +4,7 @@ require 'net/http'
 require 'uri'
 require 'logger'
 require 'fileutils'
+require 'yaml'
 
 set :port, 4567
 set :bind, '0.0.0.0'
@@ -15,12 +16,40 @@ STDOUT.sync = true
 
 set :public_folder, 'public'
 
-# 環境変数から設定を読み込む
-LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
-LLM_MODEL = ENV['LLM_MODEL'] || 'plamo-2-translate'
-LLM_REASONING_EFFORT = ENV['LLM_REASONING_EFFORT']
-LLM_TEMPERATURE = ENV['LLM_TEMPERATURE']
-LLM_MAX_TOKENS = ENV['LLM_MAX_TOKENS']
+# 設定ファイルから読み込む。
+#
+# config.yaml は必須であり、config.yaml.sample へのフォールバックは行わない。
+# 存在しない・解析不能な場合は明確なエラーで起動を止める（運営者に知らせる）。
+# 読み込み時に未設定の label をキー名で補完する（各所での処理を不要にする）。
+def load_config
+  path = 'config.yaml'
+
+  cfg = YAML.safe_load(File.read(path))
+  raise "Setting file must be a top-level YAML mapping: #{path}" unless cfg.is_a?(Hash)
+
+  presets = cfg['presets']
+  raise "Setting file has no 'presets' mapping (or it is empty): #{path}.\n" \
+        "Define at least one preset (see config.yaml.sample) and create config.yaml." \
+        unless presets.is_a?(Hash) && !presets.empty?
+
+  # label 未設定のプリセットはキー名で補完（ここだけ集中処理する）
+  presets.each do |name, preset|
+    preset['label'] ||= name if preset.is_a?(Hash)
+  end
+  cfg
+rescue Errno::ENOENT
+  abort "Setting file missing: #{path}.\nCreate it from config.yaml.sample and restart.\n"
+rescue => e
+  abort "Failed to load #{path}: #{e.message}"
+end
+
+CONFIG = load_config
+LLM_ENDPOINT = CONFIG.fetch('endpoint', 'http://host.docker.internal:1234')
+api_key_raw = CONFIG['api_key'].to_s
+API_KEY = api_key_raw.empty? || api_key_raw == 'dummy' ? '' : api_key_raw
+DEFAULT_PRESET = CONFIG['default_preset']
+PRESETS = CONFIG['presets']
+
 PDF_TRANSLATE_ENDPOINT = ENV['PDF_TRANSLATE_ENDPOINT'] || 'http://pdf2zh:11007'
 TRANSLATIONS_FILE = 'data/translations.json'
 PDF_DIR = 'data/pdfs'
@@ -65,14 +94,30 @@ def load_translations
   end
 end
 
+# プリセットの解決。存在しなければデフォルト、それもなければ最初のプリセット。
+def resolve_preset(name)
+  preset = PRESETS[name]
+  return preset if preset
+  return PRESETS[DEFAULT_PRESET] if DEFAULT_PRESET && PRESETS.key?(DEFAULT_PRESET)
+  PRESETS.values.first
+end
+
+# プリセットを /api/presets の形に整える。
+# label は load_config 時に補完済みなのでそのまま返す。
+def presets_to_response
+  {
+    default_preset: DEFAULT_PRESET,
+    presets: PRESETS.map { |name, preset| { name: name, label: preset['label'] } }
+  }
+end
+
 # テキスト翻訳結果をJSONファイルに保存する
-def save_text_translation(input_text, output_text, source_lang, target_lang, metrics)
+def save_text_translation(input_text, output_text, target_lang, metrics)
   translations = load_translations
-  
+
   translation_record = {
     type: 'text',
     timestamp: Time.now.iso8601,
-    source_lang: source_lang,
     target_lang: target_lang,
     input: input_text,
     output: output_text,
@@ -86,10 +131,9 @@ rescue => e
   logger.error "Failed to save text translation: #{e.message}"
 end
 
-# PDF翻訳結果をJSONファイルに保存する
 def save_pdf_translation(task_id, filename, source_lang, target_lang, pages, metrics)
   translations = load_translations
-  
+
   translation_record = {
     type: 'pdf',
     timestamp: Time.now.iso8601,
@@ -113,21 +157,31 @@ get '/' do
   send_file File.join(settings.public_folder, 'index.html')
 end
 
+# プリセット情報の取得
+get '/api/presets' do
+  content_type :json
+  presets_to_response.to_json
+end
+
 # テキスト翻訳APIエンドポイント(Server-Sent Events形式でストリーミング)
 post '/api/translate-text' do
   content_type 'text/event-stream'
-  
+
   stream :keep_open do |out|
     begin
       request_body = JSON.parse(request.body.read)
       text = request_body['text']
-      source_lang = request_body['source_lang'] || 'auto'
       target_lang = request_body['target_lang'] || 'auto'
+      preset_name = request_body['preset']
 
       logger.info "=== Text Translation Request ==="
-      logger.info "Source: #{source_lang}"
+      logger.info "Preset: #{preset_name}"
       logger.info "Target: #{target_lang}"
       logger.info "Text length: #{text&.length || 0}"
+
+      preset = resolve_preset(preset_name) || {}
+      model = preset['model']
+      return send_error(out, "model is required in the preset") unless model
 
       prompt = (PROMPT_TEMPLATES[target_lang] || PROMPT_TEMPLATES['en']) + "\n\n#{text}"
 
@@ -138,20 +192,20 @@ post '/api/translate-text' do
       start_time = Time.now
       first_token_time = nil
       translation_saved = false
-      
+      final_output = ""
+
       Net::HTTP.start(uri.host, uri.port, read_timeout: 300) do |http|
         request = Net::HTTP::Post.new(uri.path)
         request['Content-Type'] = 'application/json'
+        request['Authorization'] = "Bearer #{API_KEY}" unless API_KEY.empty?
+
         payload = {
-          model: LLM_MODEL,
+          model: model,
           messages: [{ role: 'user', content: prompt }],
           stream: true
         }
-        # 汎用LLM向けの追加パラメータ。未設定の場合は送らない（互換性のため）
-        payload['temperature'] = LLM_TEMPERATURE.to_f if LLM_TEMPERATURE
-        payload['max_tokens'] = LLM_MAX_TOKENS.to_i if LLM_MAX_TOKENS
-        # llama.cpp 固有のOpenAI互換パラメータ。未設定時は送らない
-        payload['reasoning_effort'] = LLM_REASONING_EFFORT if LLM_REASONING_EFFORT
+        payload['temperature'] = preset['temperature'].to_f if preset['temperature']
+        payload['reasoning_effort'] = preset['reasoning_effort'] if preset['reasoning_effort']
         request.body = payload.to_json
 
         http.request(request) do |response|
@@ -162,12 +216,12 @@ post '/api/translate-text' do
           end
 
           buffer = ''
-          
+
           response.read_body do |chunk|
             buffer += chunk
             lines = buffer.split("\n", -1)
             buffer = lines.pop || ''
-            
+
             lines.each do |line|
               line = line.strip
               next if line.empty?
@@ -180,18 +234,20 @@ post '/api/translate-text' do
                 total_time = end_time - start_time
                 time_to_first_token = first_token_time ? first_token_time - start_time : 0
                 tokens_per_sec = token_count > 0 ? token_count / total_time : 0
-                
-                if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+
+                final_output = accumulated_output
+
+                if SAVE_TRANSLATIONS && !translation_saved && final_output != ""
                   metrics = {
                     token_count: token_count,
                     time_to_first_token: time_to_first_token.round(3),
                     total_time: total_time.round(3),
                     tokens_per_sec: tokens_per_sec.round(2)
                   }
-                  save_text_translation(text, accumulated_output, source_lang, target_lang, metrics)
+                  save_text_translation(text, final_output, target_lang, metrics)
                   translation_saved = true
                 end
-                
+
                 out << "data: #{JSON.generate({ done: true })}\n\n"
                 next
               end
@@ -199,7 +255,7 @@ post '/api/translate-text' do
               begin
                 json = JSON.parse(data)
                 content = json.dig('choices', 0, 'delta', 'content')
-                
+
                 if content
                   token_count += 1
                   first_token_time ||= Time.now
@@ -213,18 +269,20 @@ post '/api/translate-text' do
                   total_time = end_time - start_time
                   time_to_first_token = first_token_time ? first_token_time - start_time : 0
                   tokens_per_sec = token_count > 0 ? token_count / total_time : 0
-                  
-                  if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+
+                  final_output = accumulated_output
+
+                  if SAVE_TRANSLATIONS && !translation_saved && final_output != ""
                     metrics = {
                       token_count: token_count,
                       time_to_first_token: time_to_first_token.round(3),
                       total_time: total_time.round(3),
                       tokens_per_sec: tokens_per_sec.round(2)
                     }
-                    save_text_translation(text, accumulated_output, source_lang, target_lang, metrics)
+                    save_text_translation(text, final_output, target_lang, metrics)
                     translation_saved = true
                   end
-                  
+
                   out << "data: #{JSON.generate({ done: true })}\n\n"
                   next
                 end
@@ -233,7 +291,7 @@ post '/api/translate-text' do
               end
             end
           end
-          
+
           unless buffer.empty?
             if buffer.start_with?('data: ')
               data = buffer.sub('data: ', '').strip
@@ -242,18 +300,20 @@ post '/api/translate-text' do
                 total_time = end_time - start_time
                 time_to_first_token = first_token_time ? first_token_time - start_time : 0
                 tokens_per_sec = token_count > 0 ? token_count / total_time : 0
-                
-                if SAVE_TRANSLATIONS && !translation_saved && accumulated_output != ""
+
+                final_output = accumulated_output
+
+                if SAVE_TRANSLATIONS && !translation_saved && final_output != ""
                   metrics = {
                     token_count: token_count,
                     time_to_first_token: time_to_first_token.round(3),
                     total_time: total_time.round(3),
                     tokens_per_sec: tokens_per_sec.round(2)
                   }
-                  save_text_translation(text, accumulated_output, source_lang, target_lang, metrics)
+                  save_text_translation(text, final_output, target_lang, metrics)
                   translation_saved = true
                 end
-                
+
                 out << "data: #{JSON.generate({ done: true })}\n\n"
               end
             end
@@ -271,6 +331,12 @@ post '/api/translate-text' do
       out.close
     end
   end
+end
+
+# エラーをSSEで返す
+def send_error(out, message)
+  out << "data: #{JSON.generate({ error: message })}\n\n"
+  out << "data: #{JSON.generate({ done: true })}\n\n"
 end
 
 # PDF翻訳開始（タスクIDを即座に返す）
@@ -571,4 +637,6 @@ end
 logger.info "=== LocaLingo Starting ==="
 logger.info "LLM Endpoint: #{LLM_ENDPOINT}"
 logger.info "PDF Translate Endpoint: #{PDF_TRANSLATE_ENDPOINT}"
+logger.info "Available presets: #{PRESETS.keys.join(', ')}"
+logger.info "Default preset: #{DEFAULT_PRESET}"
 logger.info "Server will run on http://0.0.0.0:4567"

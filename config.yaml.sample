@@ -1,0 +1,55 @@
+# LocaLingo configuration (sample)
+#
+# This file is a template. Before using LocaLingo, copy it to `config.yaml`
+# in the same directory and edit that real file:
+#
+#   cp config.yaml.sample config.yaml
+#
+# `config.yaml` is git-ignored (it may contain a real API key) and is
+# required at startup. If it is missing, or if it is not valid YAML /
+# does not define at least one preset, the application refuses to start and
+# prints an error. This file is kept only as a reference template; it is not
+# read by the application.
+#
+# A preset is one model on the single configured endpoint, optionally combined
+# with `reasoning_effort` and `temperature`. Only `model` is required per
+# preset. The other fields are optional: when omitted, the WebUI displays the
+# preset's key name and the corresponding parameter is simply not sent to the
+# LLM API.
+
+# The single LLM endpoint. OpenAI-compatible /v1 (e.g. llama.cpp, Ollama,
+# vLLM, or any OpenAI-compatible server).
+endpoint: http://host.docker.internal:1234
+
+# API key. Leave as `dummy` for a local self-hosted model such as llama.cpp.
+# The value is sent only when it is non-empty and not the literal placeholder
+# `dummy`. Put a real key here only when calling a cloud LLM.
+api_key: dummy
+
+# The preset selected when the page first loads. Must be a key under `presets`.
+default_preset: fast
+
+# Translation presets offered by the WebUI.
+#
+# `model` is the only required field. `label` (shown in the WebUI),
+# `reasoning_effort` and `temperature` are optional.
+presets:
+  # Minimal form: only `model`.
+  # No `label`, `reasoning_effort`, or `temperature` -> the WebUI shows the
+  # preset key ("fast") and none of those parameters are sent.
+  fast:
+    model: qwen3-4b-instruct
+
+  # Add `reasoning_effort`. `label` is also present.
+  balanced:
+    label: balanced
+    reasoning_effort: low
+    model: qwen3-14b-instruct
+
+  # Full form: every field.
+  # A custom `label` differs from the key; `temperature` is also set.
+  quality:
+    label: high quality
+    reasoning_effort: high
+    temperature: 0.7
+    model: qwen3-32b-instruct

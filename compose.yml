@@ -10,6 +10,7 @@ services:
       - ./localingo/app.rb:/app/app.rb
       - ./localingo/public:/app/public
       - ./localingo/data:/app/data
+      - ./config.yaml:/app/config.yaml
     environment:
       - RACK_ENV=development
       - LLM_ENDPOINT=http://host.docker.internal:1234 # Set your LLM endpoint
