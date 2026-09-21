@@ -18,6 +18,10 @@ set :public_folder, 'public'
 # 環境変数から設定を読み込む
 LLM_ENDPOINT = ENV['LLM_ENDPOINT'] || 'http://host.docker.internal:1234'
 LLM_MODEL = ENV['LLM_MODEL'] || 'plamo-2-translate'
+# 汎用LLM向けの追加設定（必要に応じて環境変数で指定）
+LLM_REASONING_EFFORT = ENV['LLM_REASONING_EFFORT'] # thinking effort: none|minimal|low|medium|high|max
+LLM_TEMPERATURE = ENV['LLM_TEMPERATURE']           # 例: "0.1"
+LLM_MAX_TOKENS = ENV['LLM_MAX_TOKENS']             # 例: "16384"
 PDF_TRANSLATE_ENDPOINT = ENV['PDF_TRANSLATE_ENDPOINT'] || 'http://pdf2zh:11007'
 TRANSLATIONS_FILE = 'data/translations.json'
 PDF_DIR = 'data/pdfs'
@@ -30,25 +34,18 @@ PDF_TASK_METADATA = {}
 FileUtils.mkdir_p(File.dirname(TRANSLATIONS_FILE))
 FileUtils.mkdir_p(PDF_DIR)
 
-# 言語マッピング
+# 言語マッピング。汎用LLM対応のため、UIで提示する言語に限定。
+# 以前はplamo-2-translateのチャットテンプレートに対応した全言語（ja-easy, zh-tw,
+# ar, id, nl, th, vi, ru）を保持していたが、汎用LLMでは言語を自由に指定できるため
+# 最小のセットに絞る。必要に応じて追加可能。
 LANGUAGE_MAP = {
-  'ja' => 'Japanese',
-  'ja-easy' => 'Japanese(easy)',
   'en' => 'English',
+  'ja' => 'Japanese',
   'zh' => 'Chinese',
-  'zh-tw' => 'Taiwanese',
   'ko' => 'Korean',
-  'ar' => 'Arabic',
-  'it' => 'Italian',
-  'id' => 'Indonesian',
-  'nl' => 'Dutch',
   'es' => 'Spanish',
-  'th' => 'Thai',
-  'de' => 'German',
   'fr' => 'French',
-  'vi' => 'Vietnamese',
-  'ru' => 'Russian',
-  'auto' => 'English|Japanese'
+  'de' => 'German'
 }
 
 # 翻訳履歴を読み込む
@@ -121,14 +118,23 @@ post '/api/translate-text' do
       target_lang = request_body['target_lang'] || 'auto'
 
       logger.info "=== Text Translation Request ==="
-      logger.info "Source: #{source_lang} (#{LANGUAGE_MAP[source_lang]})"
-      logger.info "Target: #{target_lang} (#{LANGUAGE_MAP[target_lang]})"
+      logger.info "Source: #{source_lang}"
+      logger.info "Target: #{target_lang}"
       logger.info "Text length: #{text&.length || 0}"
 
-      input_lang = LANGUAGE_MAP[source_lang] || LANGUAGE_MAP['auto']
-      output_lang = LANGUAGE_MAP[target_lang] || LANGUAGE_MAP['auto']
-      
-      prompt = "<|plamo:op|>dataset\ntranslation\n\n<|plamo:op|>input lang=#{input_lang}\n#{text}<|plamo:op|>output lang=#{output_lang}"
+      # 汎用LLM向けの翻訳指示。以前はplamo-2-translate専用のチャットテンプレート
+      #  (<|plamo:op|>dataset ... input lang= ... output lang=) を利用していたが、
+      # 汎用LLMでは言語名を自然な文の形で指示する形に変更した。
+      # 指示文は英語で書いている（汎用LLMに最も信頼性の高い）。
+      target_name = LANGUAGE_MAP[target_lang] || target_lang
+      if source_lang && source_lang != 'auto'
+        source_name = LANGUAGE_MAP[source_lang] || source_lang
+        prompt = "Translate the following #{source_name} text into #{target_name}. " \
+                 "Respond with the translation only. Do not add any explanation or commentary.\n\n#{text}"
+      else
+        prompt = "Translate the following text into #{target_name}. " \
+                 "Respond with the translation only. Do not add any explanation or commentary.\n\n#{text}"
+      end
 
       uri = URI.parse("#{LLM_ENDPOINT}/v1/chat/completions")
 
@@ -141,12 +147,17 @@ post '/api/translate-text' do
       Net::HTTP.start(uri.host, uri.port, read_timeout: 300) do |http|
         request = Net::HTTP::Post.new(uri.path)
         request['Content-Type'] = 'application/json'
-        request.body = {
+        payload = {
           model: LLM_MODEL,
           messages: [{ role: 'user', content: prompt }],
-          stop: ["<|plamo:op|>", "<|plamo:reserved:0x1E|>"],
           stream: true
-        }.to_json
+        }
+        # 汎用LLM向けの追加パラメータ。未設定の場合は送らない（互換性のため）
+        payload['temperature'] = LLM_TEMPERATURE.to_f if LLM_TEMPERATURE
+        payload['max_tokens'] = LLM_MAX_TOKENS.to_i if LLM_MAX_TOKENS
+        # llama.cpp 固有のOpenAI互換パラメータ。未設定時は送らない
+        payload['reasoning_effort'] = LLM_REASONING_EFFORT if LLM_REASONING_EFFORT
+        request.body = payload.to_json
 
         http.request(request) do |response|
           unless response.code == '200'

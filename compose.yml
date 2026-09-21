@@ -16,6 +16,10 @@ services:
       - LLM_MODEL=plamo-2-translate # Set your model name
       - TZ=Asia/Tokyo # Set your timezone
       # - SAVE_TRANSLATIONS=false # Uncomment to disable saving translations
+      # 汎用LLM向けの追加パラメータ（必要に応じて有効化）
+      # - LLM_REASONING_EFFORT=none # thinking effort: none|minimal|low|medium|high|max (llama.cpp)
+      # - LLM_TEMPERATURE=0.1
+      # - LLM_MAX_TOKENS=16384
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -25,30 +29,33 @@ services:
       retries: 3
     restart: unless-stopped
 
-  pdf2zh:
-    build:
-      context: ./pdf2zh
-      dockerfile: Dockerfile
-    ports:
-      - "11007:11007"
-    environment:
-      - OPENAILIKED_MODEL=plamo-2-translate
-      - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1 # Set your LLM endpoint
-      - OPENAILIKED_API_KEY=dummy
-      - OPENAILIKED_STOP_TOKENS=<|plamo:op|> <|plamo:reserved:0x1E|>
-      - OPENAILIKED_MAX_TOKENS=512 # Short-term restrictions in place in case of LLM runaway incidents
-      - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
-      - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
+  # PDF翻訳（pdf2zh/PDFMathTranslate）は、汎用LLM化テスト中のため非有効化（コメントアウト）。
+  # 後で対応が必要になったら解除する。
+  # pdf2zh:
+  #   build:
+  #     context: ./pdf2zh
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "11007:11007"
+  #   environment:
+  #     - OPENAILIKED_MODEL=plamo-2-translate
+  #     - OPENAILIKED_BASE_URL=http://host.docker.internal:1234/v1 # Set your LLM endpoint
+  #     - OPENAILIKED_API_KEY=dummy
+  #     - OPENAILIKED_STOP_TOKENS=<|plamo:op|> <|plamo:reserved:0x1E|>
+  #     - OPENAILIKED_MAX_TOKENS=512 # Short-term restrictions in place in case of LLM runaway incidents
+  #     - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   restart: unless-stopped
 
   # Remove this service if you do not want to expose it externally
   # 外部公開しない場合はこのサービスを削除してください
-  tunnel:
-    image: cloudflare/cloudflared
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
-      TUNNEL_METRICS: "0.0.0.0:4567"
-    restart: unless-stopped
+  # 汎用LLM化テスト中のため非有効化（コメントアウト）。
+  # tunnel:
+  #   image: cloudflare/cloudflared
+  #   command: tunnel run
+  #   environment:
+  #     TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
+  #     TUNNEL_METRICS: "0.0.0.0:4567"
+  #   restart: unless-stopped
